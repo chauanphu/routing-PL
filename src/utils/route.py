@@ -1,5 +1,6 @@
 from typing import Dict, List, Set
 from utils.load_data import Location, OrderItem
+import random
 
 class Node:
     location: Location
@@ -39,7 +40,7 @@ class DAG:
     """A DAG representation of the order sets"""
     def __init__(self):
         self.nodes: Dict[int, Node] = {}  # location_id -> Node
-        self.orders: Dict[int, OrderItem] = {}  # location_id -> OrderItem
+        self.orders: Dict[int, OrderItem] = {}  # order_id -> OrderItem
         self.edges: Dict[int, Set[int]] = {}  # location_id -> set of child location_ids
         self.max_capacity = 100
         self.depot_node = None
@@ -79,9 +80,31 @@ class DAG:
         # Add edge
         self.nodes[end_id].in_degree += 1
         self.edges[start_id].add(end_id)
-        self.orders[start_id] = order
+        self.orders[order.order_id] = order
 
         return True
+
+    def remove_order(self, order_id):
+        """Remove an order from the DAG"""
+        if order_id not in self.orders:
+            return
+        order = self.orders[order_id]
+        start_id = order.start_location.id
+        end_id = order.end_location.id
+        # Update pickup count and load
+        self.nodes[start_id].num_pickup -= 1
+        self.nodes[start_id].load -= order.demand
+        # Remove edge
+        self.nodes[end_id].in_degree -= 1
+        self.edges[start_id].remove(end_id)
+        # Remove start and end nodes if they are not connected to any other nodes
+        if self.nodes[start_id].in_degree == 0 and self.nodes[start_id].num_pickup == 0:
+            del self.nodes[start_id]
+            del self.edges[start_id]
+        if self.nodes[end_id].in_degree == 0:
+            del self.nodes[end_id]
+            del self.edges[end_id]
+        del self.orders[order_id]
 
     def _would_create_cycle(self, start_id: int, end_id: int) -> bool:
         """Check if adding an edge would create a cycle using DFS"""
@@ -104,13 +127,12 @@ class DAG:
         """Generate all possible topological sorts of the DAG"""
         # Copy in-degrees so we don't modify the original graph
         in_degree = {node_id: self.nodes[node_id].in_degree for node_id in self.nodes}
-        result: List[Route] = []
+        routes: List[Route] = []
         current_sort = Route()
         visited = set()
-
         def backtrack():
             if len(current_sort) == len(self.nodes):
-                result.append(current_sort.copy())
+                routes.append(current_sort.copy())
                 return
 
             # Find all nodes with in-degree 0 that haven't been used
@@ -124,9 +146,7 @@ class DAG:
                     # Reduce in-degree for all neighbors
                     for neighbor in self.edges[node_id]:
                         in_degree[neighbor] -= 1
-
                     backtrack()
-
                     # Backtrack: restore state
                     visited.remove(node_id)
                     current_sort.locations.pop()
@@ -135,26 +155,124 @@ class DAG:
 
         backtrack()
         if self.depot_node:
-            for route in result:
+            for route in routes:
                 route.add_location(self.depot_node)
-        return result
+        return routes
+
+    # Similar to all_routes, but it only returns valid routes (i.e. routes that don't exceed the capacity)
+    def valid_routes(self) -> List[Route]:
+        pass
 
     def merge_dag(self, other: 'DAG') -> bool:
+        cache = self.copy()
         """Merge another DAG into this one. Returns False if it would create a cycle."""
-        for node_id, order in other.orders.items():
+        # Roll back if it would create a cycle
+        for order in other.orders.values():
             if not self.add_order(order):
+                self.nodes = cache.nodes
+                self.orders = cache.orders
+                self.edges = cache.edges
                 return False
         return True
+    
+    def copy(self):
+        new_dag = DAG()
+        new_dag.nodes = self.nodes.copy()
+        new_dag.orders = self.orders.copy()
+        new_dag.edges = self.edges.copy()
+        new_dag.max_capacity = self.max_capacity
+        new_dag.depot_node = self.depot_node
+        return new_dag
 
-def init_routes(orders: List[OrderItem], depot: Location = None) -> List[DAG]:
+class Solution:
+    def __init__(self):
+        self.graphs: List[DAG] = []
+        
+    def add_order(self, order: OrderItem):
+        dag = DAG()
+        dag.add_order(order)
+        self.graphs.append(dag)
+
+    def add_graph(self, graph: DAG):
+        self.graphs.append(graph)
+
+    def get_graphs(self) -> List[DAG]:
+        return self.graphs
+
+    def random_pair(self) -> List[DAG]:
+        """Randomly select 2 DAGs"""
+        if len(self.graphs) < 2:
+            return None
+        return random.sample(range(len(self.graphs)), 2)
+
+    def random_merge(self) -> bool:
+        """Randomly merge two DAGs in the solution. Returns False if it would create a cycle."""
+        [index_1, index_2] = random.sample(range(len(self.graphs)), 2)
+        success = self.graphs[index_1].merge_dag(self.graphs[index_2])
+        if success:
+            self.graphs.pop(index_2)
+        return success
+    
+    def random_decompose(self) -> List[DAG]:
+        """Randomly decompose a DAG into smaller DAGs"""
+        index = random.randint(0, len(self.graphs)-1)
+        target = self.graphs[index]
+        
+        for order in target.orders.values():
+            new_dag = DAG()
+            new_dag.set_depot(target.depot_node)
+            new_dag.add_order(order)
+            self.graphs.append(new_dag)
+            
+        self.graphs.remove(target)
+        return self.graphs
+
+    def merge_dags(self, index_1: int, index_2: int) -> bool:
+        """Merge two DAGs in the solution. Returns False if it would create a cycle."""
+        success = self.graphs[index_1].merge_dag(self.graphs[index_2])
+        if success:
+            self.graphs.pop(index_2)
+        return success
+    
+    def decompose(self, index: int) -> List[DAG]:
+        """Decompose a DAG into smaller DAGs"""
+        target = self.graphs[index]
+        
+        for order in target.orders.values():
+            new_dag = DAG()
+            new_dag.set_depot(target.depot_node)
+            new_dag.add_order(order)
+            self.graphs.append(new_dag)
+            
+        self.graphs.remove(target)
+        return self.graphs
+    
+    def swap(self, index_1: int, index_2: int) -> bool:
+        """Swap two random orders among 2 given DAGs"""
+        dag_1 = self.graphs[index_1]
+        dag_2 = self.graphs[index_2]
+        order_1: OrderItem = random.choice(list(dag_1.orders.values()))
+        order_2: OrderItem = random.choice(list(dag_2.orders.values()))
+        if dag_1.add_order(order_2) and dag_2.add_order(order_1):
+            dag_1.remove_order(order_id=order_1.order_id)
+            dag_2.remove_order(order_id=order_2.order_id)
+            return True
+        return False
+
+    def random_swap(self) -> bool:
+        """Randomly swap two orders among 2 random DAGs"""
+        [index_1, index_2] = self.random_pair()
+        return self.swap(index_1, index_2)
+
+def init_routes(orders: List[OrderItem], depot: Location = None) -> Solution:
     """
     ## Create a tree representation of the route
     """
-    dags = []
+    solution = Solution()
     for order in orders:
         dag = DAG()
         dag.add_order(order)
         dag.set_depot(depot)
-        dags.append(dag)
+        solution.add_graph(dag)
 
-    return dags
+    return solution

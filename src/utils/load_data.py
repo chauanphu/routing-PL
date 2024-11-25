@@ -28,7 +28,8 @@ class Location:
         self.isDepot = False
 
 class OrderItem:
-    def __init__(self, start_location: Location, end_location: Location, demand: int, ready_time: int, due_date: int, service_time: int):
+    def __init__(self, order_id, start_location: Location, end_location: Location, demand: int, ready_time: int, due_date: int, service_time: int):
+        self.order_id = order_id
         self.start_location = start_location
         self.end_location = end_location
         self.demand = demand
@@ -85,6 +86,6 @@ def convert_to_orders(customer_data: List[CustomerInstance]) -> List[OrderItem]:
     start_location = Location(0, customer_data[0].xcoord, customer_data[0].ycoord)
     for customer in customer_data[1:]:
         end_location = Location(customer.cust_no, customer.xcoord, customer.ycoord)
-        order = OrderItem(start_location, end_location, customer.demand, customer.ready_time, customer.due_date, customer.service_time)
+        order = OrderItem(customer.cust_no, start_location, end_location, customer.demand, customer.ready_time, customer.due_date, customer.service_time)
         orders.append(order)
     return orders
