@@ -4,6 +4,7 @@ import logging
 from utils.route import Solution, init_solution
 from utils.solver import SimulatedAnnealingSolver
 logging.basicConfig(level=logging.INFO)
+import json
 
 def main():
     # Load the Solomon VRP benchmark file
@@ -16,8 +17,9 @@ def main():
     initial_solution: Solution = init_solution(orders, end_depot, vehicle_info.capacity)
     print("Initial Solution:", initial_solution.total_distance())
     solver = SimulatedAnnealingSolver(initial_solution, initial_temp=1000, cooling_rate=0.95, stopping_temp=1)
-    best_solution: Solution = solver.anneal()
-    print("Best Solution:", best_solution.total_distance())   
-
+    best_solution, history = solver.anneal()
+    # Save history to a JSON file
+    with open('output/history.json', 'w') as f:
+        json.dump(history, f)
 if __name__ == "__main__":
     main()

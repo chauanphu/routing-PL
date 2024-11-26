@@ -25,6 +25,9 @@ class Node:
     def set_service_time(self, time: int):
         self.service_time += time
 
+    def __repr__(self) -> str:
+        return f"Location={self.location.id}, Load={self.load}, NumPickup={self.num_pickup}, InDegree={self.in_degree}, EarliestTime={self.earliest_time}, ServiceTime={self.service_time}"
+
 class Route:
     def __init__(self):
         self.locations: List[Location] = []
@@ -109,9 +112,9 @@ class DAG:
 
         self.changed = True
         # Check for cycles
-        if self.orders:
-            if len(self.best_route()) == 0:
-                return False
+        if self._check_cycle(start_id, end_id) or self.nodes[start_id].load + order.demand > self.max_capacity:
+            return False
+        
         # Update pickup count and load
         self.nodes[start_id].num_pickup += 1
         self.nodes[start_id].load += order.demand
@@ -119,13 +122,12 @@ class DAG:
         # Add edge to matrix
         start_idx = self.id_to_index[start_id]
         end_idx = self.id_to_index[end_id]
-        self.adj_matrix[start_idx][end_idx] +=1
-        self.nodes[end_id].in_degree += 1
+        self.adj_matrix[start_idx][end_idx] = 1  # Changed from += to = 
+        self.nodes[end_id].in_degree = sum(self.adj_matrix[i][end_idx] for i in range(len(self.adj_matrix)))  # Fix in_degree calculation
+        
         self.orders[order.order_id] = order
         
         # Update the earliest due date
-        # The earliest due date of the destination node is the minimum of the earliest due date of orders
-        # The earliest due date of the starting node is the earliest due date of the destination nodes
         self.nodes[end_id].set_earliest_time(order.due_date)
         self.nodes[start_id].set_earliest_time(self.nodes[end_id].earliest_time)
         self.nodes[end_id].set_service_time(order.service_time)
@@ -232,7 +234,11 @@ class DAG:
 
     def valid_routes(self) -> List[Route]:
         """Generate all possible valid topological sorts of the DAG considering capacity constraints"""
-        in_degree = {node_id: self.nodes[node_id].in_degree for node_id in self.nodes}
+        # Recompute in_degrees to ensure correctness
+        in_degree = {node_id: sum(self.adj_matrix[i][self.id_to_index[node_id]] 
+                                 for i in range(len(self.adj_matrix))) 
+                    for node_id in self.nodes}
+        
         routes: List[Route] = []
         current_sort = Route()
         visited = set()
@@ -295,6 +301,8 @@ class DAG:
         assert len(routes) > 0 and len(self.orders) >= 1, f"""
         Number of routes: {len(routes)}.
         Number of orders: {len(self.orders)}.
+        Adjacency matrix: {self.adj_matrix}.
+        Nodes: {[node for node in self.nodes.values()]}.
         """
         return routes
 

@@ -28,15 +28,16 @@ class SimulatedAnnealingSolver:
         #     new_solution.random_decompose()
         if operation == 'swap':
             print("Swapping...")
-            new_solution.random_swap()
+            succss = new_solution.random_swap()
+            if not succss:
+                print("Swapping failed")
         elif operation == 'merge':
             print("Merging...")
             new_solution.random_merge()
         return new_solution
 
-    def accept_solution(self, candidate_solution: Solution) -> bool:
+    def accept_solution(self, candidate_cost: float) -> bool:
         current_cost = self.objective_function(self.current_solution)
-        candidate_cost = self.objective_function(candidate_solution)
         if candidate_cost < current_cost:
             return True
         else:
@@ -44,6 +45,8 @@ class SimulatedAnnealingSolver:
             return random.random() < acceptance_prob
 
     def anneal(self):
+        history = {"iteration": [], "current_cost": [], "best_cost": []}
+
         iteration = 0
         print(f"Initial temperature: {self.current_temp:.2f}")
         print(f"Initial solution cost: {self.objective_function(self.current_solution):.2f}")
@@ -51,9 +54,10 @@ class SimulatedAnnealingSolver:
         while self.current_temp > self.stopping_temp:
             iteration += 1
             candidate_solution = self.local_search(self.current_solution)
-            if self.accept_solution(candidate_solution):
+            candidate_cost = self.objective_function(candidate_solution)
+            if self.accept_solution(candidate_cost):
                 self.current_solution = candidate_solution
-                if self.objective_function(candidate_solution) < self.objective_function(self.best_solution):
+                if candidate_cost < self.objective_function(self.best_solution):
                     self.best_solution = candidate_solution
                     print(f"Iteration {iteration}: New best solution found!")
                     print(f"Temperature: {self.current_temp:.2f}")
@@ -64,13 +68,18 @@ class SimulatedAnnealingSolver:
             
             # Print progress every 100 iterations
             if iteration % 10 == 0:
+                current_cost = self.objective_function(self.current_solution)
+                best_cost = self.objective_function(self.best_solution)
+                history["iteration"].append(iteration)
+                history["current_cost"].append(current_cost)
+                history["best_cost"].append(best_cost)
                 print(f"Iteration {iteration}")
                 print(f"Current temperature: {self.current_temp:.2f}")
-                print(f"Current cost: {self.objective_function(self.current_solution):.2f}")
-                print(f"Best cost: {self.objective_function(self.best_solution):.2f}")
+                print(f"Current cost: {current_cost:.2f}")
+                print(f"Best cost: {best_cost:.2f}")
                 print("-" * 50)
         
         print("\nSimulated Annealing completed!")
         print(f"Final temperature: {self.current_temp:.2f}")
         print(f"Best solution cost: {self.objective_function(self.best_solution):.2f}")
-        return self.best_solution
+        return self.best_solution, history
