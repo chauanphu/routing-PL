@@ -1,8 +1,7 @@
 import math
 from typing import Dict, List
 from utils.load_data import Location, OrderItem
-import random
-from multiprocessing import Pool
+import networkx as nx
 
 class Node:
     location: Location
@@ -60,414 +59,220 @@ class Route:
         new_route.locations = self.locations.copy()
         return new_route
 
-class DAG:
-    def __init__(self):
-        self.nodes: Dict[int, Node] = {}
+class OrderSet(nx.DiGraph):
+    def __init__(self, capacity: int = 0):
+        super().__init__()
+        self.max_capacity = capacity
         self.orders: Dict[int, OrderItem] = {}
-        self.adj_matrix: List[List[int]] = []  # adjacency matrix
-        self.max_capacity = 100
-        self.depot_node = None
-        self.id_to_index = {}  # maps location IDs to matrix indices
-        self.index_to_id = {}  # maps matrix indices to location IDs
-        # Cache the optimal route
-        self.changed = False
-        self.num_routes = 0
-        self.cost = float('inf')
-        self.optimal_route = None
-
-    def set_depot(self, depot: Location):
-        """Set the depot location"""
-        self.depot_node = depot
-    
-    def _resize_matrix(self, new_id: int):
-        """Resize adjacency matrix when adding new nodes"""
-        if new_id not in self.id_to_index:
-            new_index = len(self.adj_matrix)
-            self.id_to_index[new_id] = new_index 
-            self.index_to_id[new_index] = new_id
-            # Add new row and column
-            for row in self.adj_matrix:
-                row.append(0)
-            self.adj_matrix.append([0] * (new_index + 1))
-
-    def add_order(self, order: OrderItem) -> bool:
-        start_id = order.start_location.id
-        end_id = order.end_location.id
-
-        if (start_id not in self.nodes) and (end_id not in self.nodes) and self.nodes:
-            return False
-
-        # Create nodes if they don't exist
-        if start_id not in self.nodes:
-            start_node = Node()
-            start_node.location = order.start_location
-            self.nodes[start_id] = start_node
-            self._resize_matrix(start_id)
-
-        if end_id not in self.nodes:
-            end_node = Node()
-            end_node.location = order.end_location
-            self.nodes[end_id] = end_node
-            self._resize_matrix(end_id)
-
-        self.changed = True
-        # Check for cycles
-        if self._check_cycle(start_id, end_id) or self.nodes[start_id].load + order.demand > self.max_capacity:
-            return False
         
-        # Update pickup count and load
-        self.nodes[start_id].num_pickup += 1
-        self.nodes[start_id].load += order.demand
-
-        # Add edge to matrix
-        start_idx = self.id_to_index[start_id]
-        end_idx = self.id_to_index[end_id]
-        self.adj_matrix[start_idx][end_idx] = 1  # Changed from += to = 
-        self.nodes[end_id].in_degree = sum(self.adj_matrix[i][end_idx] for i in range(len(self.adj_matrix)))  # Fix in_degree calculation
-        
-        self.orders[order.order_id] = order
-        
-        # Update the earliest due date
-        self.nodes[end_id].set_earliest_time(order.due_date)
-        self.nodes[start_id].set_earliest_time(self.nodes[end_id].earliest_time)
-        self.nodes[end_id].set_service_time(order.service_time)
-
-        return True
-
-    def _remove_from_matrix(self, node_id: int):
-        """Remove a node from the adjacency matrix and update mappings"""
-        idx = self.id_to_index[node_id]
-        # Remove row
-        self.adj_matrix.pop(idx)
-        # Remove column from each remaining row
-        for row in self.adj_matrix:
-            row.pop(idx)
-        # Update mappings
-        del self.id_to_index[node_id]
-        del self.index_to_id[idx]
-        # Update indices for nodes after the removed one
-        for id, index in self.id_to_index.items():
-            if index > idx:
-                self.id_to_index[id] = index - 1
-                self.index_to_id[index - 1] = id
-        del self.index_to_id[len(self.adj_matrix)]
-
-    def remove_order(self, order_id):
-        if order_id not in self.orders:
-            return
-        
-        self.changed = True
-        order = self.orders[order_id]
-        start_id = order.start_location.id
-        end_id = order.end_location.id
-        
-        # Update pickup count and load
-        self.nodes[start_id].num_pickup -= 1
-        self.nodes[start_id].load -= order.demand
-        
-        # Remove edge from matrix
-        start_idx = self.id_to_index[start_id]
-        end_idx = self.id_to_index[end_id]
-        self.adj_matrix[start_idx][end_idx] -= 1
-        self.nodes[end_id].in_degree -= 1
-
-        # Clean up isolated nodes
-        if self.nodes[start_id].in_degree == 0 and self.nodes[start_id].num_pickup == 0:
-            self._remove_from_matrix(start_id)
-            del self.nodes[start_id]
-        if self.nodes[end_id].in_degree == 0:
-            self._remove_from_matrix(end_id)
-            del self.nodes[end_id]
-            
-        del self.orders[order_id]
-
-    def _check_cycle(self, start_id: int, end_id: int) -> bool:
-        visited = set()
-        
-        def dfs(node_id: int) -> bool:
-            if node_id == start_id:
-                return True
-            visited.add(node_id)
-            curr_idx = self.id_to_index[node_id]
-            for next_idx, has_edge in enumerate(self.adj_matrix[curr_idx]):
-                if has_edge:
-                    next_id = self.index_to_id[next_idx]
-                    if next_id not in visited and dfs(next_id):
-                        return True
-            visited.remove(node_id)
-            return False
-
-        return dfs(end_id)
-
-    def all_routes(self) -> List[Route]:
-        """Generate all possible topological sorts of the DAG"""
-        # Copy in-degrees so we don't modify the original graph
-        in_degree = {node_id: self.nodes[node_id].in_degree for node_id in self.nodes}
-        routes: List[Route] = []
-        current_sort = Route()
-        visited = set()
-        def backtrack():
-            if len(current_sort) == len(self.nodes):
-                routes.append(current_sort.copy())
-                return
-
-            # Find all nodes with in-degree 0 that haven't been used
-            for node_id, degree in in_degree.items():
-                if degree == 0 and node_id not in visited:
-                    visited.add(node_id)
-                    current_sort.add_location(self.nodes[node_id].location)
-                    for next_idx, has_edge in enumerate(self.adj_matrix[self.id_to_index[node_id]]):
-                        if has_edge:
-                            in_degree[self.index_to_id[next_idx]] -= 1
-                    backtrack()
-                    visited.remove(node_id)
-                    current_sort.pop_location()
-                    for next_idx, has_edge in enumerate(self.adj_matrix[self.id_to_index[node_id]]):
-                        if has_edge:
-                            in_degree[self.index_to_id[next_idx]] += 1
-
-        backtrack()
-        if self.depot_node:
-            for route in routes:
-                route.add_location(self.depot_node)
-        return routes
-
-    def valid_routes(self) -> List[Route]:
-        """Generate all possible valid topological sorts of the DAG considering capacity constraints"""
-        # Recompute in_degrees to ensure correctness
-        in_degree = {node_id: sum(self.adj_matrix[i][self.id_to_index[node_id]] 
-                                 for i in range(len(self.adj_matrix))) 
-                    for node_id in self.nodes}
-        
-        routes: List[Route] = []
-        current_sort = Route()
-        visited = set()
-        # Track demands that need to be delivered to each location
-        pending_demands = {loc_id: 0 for loc_id in self.nodes}
-        current_load = 0
-
-        def backtrack():
-            nonlocal current_load
-            if len(current_sort) == len(self.nodes):
-                routes.append(current_sort.copy())
-                return
-
-            for node_id, degree in in_degree.items():
-                if degree == 0 and node_id not in visited:
-                    # Check if adding this node's pickups would exceed capacity
-                    new_load = current_load + self.nodes[node_id].load
-                    if new_load > self.max_capacity:
-                        continue
-                        
-                    visited.add(node_id)
-                    current_sort.add_location(self.nodes[node_id].location)
-                    
-                    # Update load: add pickups and remove deliveries
-                    current_load = new_load - pending_demands[node_id]
-                    
-                    # Update pending deliveries for destination nodes
-                    node_idx = self.id_to_index[node_id]
-                    for next_idx, count in enumerate(self.adj_matrix[node_idx]):
-                        if count > 0:
-                            next_id = self.index_to_id[next_idx]
-                            in_degree[next_id] -= 1
-                            # Add pending demands for destination
-                            for order in self.orders.values():
-                                if order.start_location.id == node_id and order.end_location.id == next_id:
-                                    pending_demands[next_id] += order.demand
-
-                    backtrack()
-
-                    # Restore state when backtracking
-                    visited.remove(node_id)
-                    current_sort.pop_location()
-                    current_load = new_load - self.nodes[node_id].load
-                    
-                    node_idx = self.id_to_index[node_id]
-                    for next_idx, count in enumerate(self.adj_matrix[node_idx]):
-                        if count > 0:
-                            next_id = self.index_to_id[next_idx]
-                            in_degree[next_id] += 1
-                            # Remove pending demands
-                            for order in self.orders.values():
-                                if order.start_location.id == node_id and order.end_location.id == next_id:
-                                    pending_demands[next_id] -= order.demand
-
-        backtrack()
-        if self.depot_node:
-            for route in routes:
-                route.add_location(self.depot_node)
-        
-        assert len(routes) > 0 and len(self.orders) >= 1, f"""
-        Number of routes: {len(routes)}.
-        Number of orders: {len(self.orders)}.
-        Adjacency matrix: {self.adj_matrix}.
-        Nodes: {[node for node in self.nodes.values()]}.
-        """
-        return routes
-
-    def best_route(self) -> Route:
-        """Find the route with shortest cost among all valid routes"""
-        valid = self.valid_routes()
-        if len(valid) == 0:
-            return None
-        
-        self.num_routes = len(valid)
-        min_cost = float('inf')
-        best = None
-        
-        for route in valid:
-            cost = route.get_cost()
-            if cost < min_cost:
-                min_cost = cost
-                best = route
-        assert best != None, (f"best cannot be None")
-        self.cost = min_cost
-        self.optimal_route = best        
-        return best
-
-    def fitness(self) -> tuple[float, int]:
-        """Calculate the fitness of the DAG"""
-        assert self.best_route() != None, (f"""
-            best_route() must be called before fitness(). 
-            Number of orders: {len(self.orders)}.
-            {[order for order in self.orders.values()]}
-        """)
-        assert self.cost < float('inf'), (f"best_route() must be called before fitness(). ")
-        return [self.cost, self.num_routes]
-    
-    def merge_dag(self, other: 'DAG') -> bool:
-        cache: 'DAG' = self.copy()
-        """Merge another DAG into this one. Returns False if it would create a cycle."""
-        # Roll back if it would create a cycle
-        for order in other.orders.values():
-            if not self.add_order(order):
-                self.nodes = cache.nodes
-                self.orders = cache.orders
-                self.adj_matrix = cache.adj_matrix
-                self.id_to_index = cache.id_to_index
-                self.index_to_id = cache.index_to_id
-
-                return False
-        return True
-    
-    def copy(self):
-        new_dag = DAG()
-        new_dag.nodes = self.nodes.copy()
-        new_dag.orders = self.orders.copy()
-        new_dag.adj_matrix = [row[:] for row in self.adj_matrix]
-        new_dag.max_capacity = self.max_capacity
-        new_dag.depot_node = self.depot_node
-        new_dag.id_to_index = self.id_to_index.copy()
-        new_dag.index_to_id = self.index_to_id.copy()
-        return new_dag
-    
-class SASolution:
-    def __init__(self):
-        self.graphs: List[DAG] = []
-
-    @staticmethod
-    def _compute_fitness(graph: DAG) -> float:
-        return graph.fitness()[0]
-        
-    def total_distance(self) -> float:
-        with Pool() as pool:
-            distances = pool.map(self._compute_fitness, self.graphs)
-            return sum(distances)
-
     def add_order(self, order: OrderItem):
-        dag = DAG()
-        dag.add_order(order)
-        self.graphs.append(dag)
+        self.orders[order.order_id] = order
+        # Add weight to the existing start node
+        start_loc = order.start_location
+        start_id = start_loc.id
+        end_loc = order.end_location
+        end_id = end_loc.id
 
-    def add_graph(self, graph: DAG):
-        self.graphs.append(graph)
+        if start_id in self.nodes:
+            self.nodes[start_id]['load'] += order.demand
+            self.nodes[start_id]['num_pickup'] += 1
+            self.nodes[start_id]['service_time'] += order.service_time
+            due_time = self.nodes[start_id]['due_time']
+            self.nodes[start_id]['due_time'] = min(due_time, order.due_time)
+        else:
+            self.add_node(
+                start_id, 
+                load=order.demand,
+                num_pickup=1, 
+                service_time=order.service_time,
+                due_time=order.due_time,
+                pos=(start_loc.x, start_loc.y)
+            )
 
-    def get_graphs(self) -> List[DAG]:
-        return self.graphs
-
-    def random_pair(self) -> List[DAG]:
-        """Randomly select 2 DAGs"""
-        if len(self.graphs) < 2:
-            return None
-        return random.sample(range(len(self.graphs)), 2)
-
-    def random_merge(self) -> bool:
-        """Randomly merge two DAGs in the solution. Returns False if it would create a cycle."""
-        [index_1, index_2] = random.sample(range(len(self.graphs)), 2)
-        success = self.graphs[index_1].merge_dag(self.graphs[index_2])
-        if success:
-            self.graphs.pop(index_2)
-        return success
-    
-    def random_decompose(self) -> List[DAG]:
-        """Randomly decompose a DAG into smaller DAGs"""
-        index = random.randint(0, len(self.graphs)-1)
-        target = self.graphs[index]
+        if not end_id in self.nodes:
+            self.add_node(
+                end_id, 
+                load=0,
+                num_pickup=0, 
+                service_time=0,
+                due_time=0,
+                pos=(end_loc.x, end_loc.y)
+            )
         
-        for order in target.orders.values():
-            new_dag = DAG()
-            new_dag.set_depot(target.depot_node)
-            new_dag.add_order(order)
-            self.graphs.append(new_dag)
-            
-        self.graphs.remove(target)
-        return self.graphs
+        if not self.has_edge(start_id, end_id):
+            self.add_edge(start_id, end_id, distance=order.distance)
 
-    def random_swap(self) -> bool:
-        """Randomly swap two random orders among 2 given DAGs"""
-        index_1, index_2 = self.random_pair()
-        return self.swap(index_1, index_2)
+    def remove_order(self, order: OrderItem):
+        self.remove_node(order.start_location.id)
+        self.remove_node(order.end_location.id)
+        self.orders.pop(order.order_id)
+        self.remove_edge(order.start_location.id, order.end_location.id)
 
-    def merge_dags(self, index_1: int, index_2: int) -> bool:
-        """Merge two DAGs in the solution. Returns False if it would create a cycle."""
-        success = self.graphs[index_1].merge_dag(self.graphs[index_2])
-        if success:
-            self.graphs.pop(index_2)
-        return success
+    def get_all_routes(self) -> List[Route]:
+        sortings = list(nx.all_topological_sorts(self))
+        return sortings
     
-    def decompose(self, index: int) -> List[DAG]:
-        """Decompose a DAG into smaller DAGs"""
-        target = self.graphs[index]
+    def weighted_topological_sort(G, weight='weight'):
+        import heapq
+        total_distance = 0
+        current_time = 0
+
+        # Calculate in-degree for each node
+        in_degree = {u: 0 for u in G}
+        for u in G:
+            for v in G.successors(u):
+                in_degree[v] += 1
+
+        # Initialize a heap with nodes of zero in-degree
+        heap = []
+        for u in G:
+            if in_degree[u] == 0:
+                w = G.nodes[u].get(weight, 0)
+                heapq.heappush(heap, (w, u))
+
+        sorted_nodes = []
+        while heap:
+            w, u = heapq.heappop(heap)
+            sorted_nodes.append(u)
+            for v in G.successors(u):
+                in_degree[v] -= 1
+                if in_degree[v] == 0:
+                    w_v = G.nodes[v].get(weight, 0)
+                    heapq.heappush(heap, (w_v, v))
+                    recorded_distance = G[u][v]['distance']
+                    if recorded_distance > 0:
+                        total_distance += recorded_distance
+                    else:
+                        start_loc = G.nodes[u]
+                        end_loc = G.nodes[v]
+                        start_x, start_y = start_loc['pos']
+                        end_x, end_y = end_loc['pos']
+                        distance = math.sqrt((start_x - end_x) ** 2 + (start_y - end_y) ** 2)
+                        print(f"Start Location {u}: {start_x}, {start_y}")
+                        print(f"End Location {v}: {end_x}, {end_y}")
+                        total_distance += distance
+                        print(f"Distance between {u} and {v}: {distance}")
+
+        if len(sorted_nodes) != len(G):
+            raise nx.NetworkXUnfeasible("Graph contains a cycle.")
+        if total_distance == 0:
+            raise nx.NetworkXUnfeasible("Graph has no edges.")
         
-        for order in target.orders.values():
-            new_dag = DAG()
-            new_dag.set_depot(target.depot_node)
-            new_dag.add_order(order)
-            self.graphs.append(new_dag)
-            
-        self.graphs.remove(target)
-        return self.graphs
+        return sorted_nodes, total_distance
     
-    def swap(self, index_1: int, index_2: int) -> bool:
-        """Swap two random orders among 2 given DAGs"""
-        dag_1 = self.graphs[index_1]
-        dag_2 = self.graphs[index_2]
-        if len(dag_1.orders) <= 1 and len(dag_2.orders) <= 1:
-            return False
-        order_1: OrderItem = random.choice(list(dag_1.orders.values()))
-        order_2: OrderItem = random.choice(list(dag_2.orders.values()))
-        if dag_1.add_order(order_2) and dag_2.add_order(order_1):
-            dag_1.remove_order(order_id=order_1.order_id)
-            dag_2.remove_order(order_id=order_2.order_id)
-            return True
-        return False
+    def fitness(self) -> float:
+        """
+        Calculate the fitness of the DAG
+        """
+        total_cost = 0
+        return total_cost
 
-    def copy(self):
-        new_solution = SASolution()
-        new_solution.graphs = [dag.copy() for dag in self.graphs]
-        return new_solution
+# class SASolution:
+#     def __init__(self):
+#         self.graphs: List[DAG] = []
 
-def init_solution(orders: List[OrderItem], depot: Location = None, capacity: int = 100) -> SASolution:
-    """
-    ## Create a tree representation of the route
-    """
-    solution = SASolution()
-    for order in orders:
-        dag = DAG()
-        dag.max_capacity = capacity
-        dag.add_order(order)
-        dag.set_depot(depot)
-        solution.add_graph(dag)
+#     @staticmethod
+#     def _compute_fitness(graph: DAG) -> float:
+#         return graph.fitness()[0]
+        
+#     def total_distance(self) -> float:
+#         with Pool() as pool:
+#             distances = pool.map(self._compute_fitness, self.graphs)
+#             return sum(distances)
 
-    return solution
+#     def add_order(self, order: OrderItem):
+#         dag = DAG()
+#         dag.add_order(order)
+#         self.graphs.append(dag)
+
+#     def add_graph(self, graph: DAG):
+#         self.graphs.append(graph)
+
+#     def get_graphs(self) -> List[DAG]:
+#         return self.graphs
+
+#     def random_pair(self) -> List[DAG]:
+#         """Randomly select 2 DAGs"""
+#         if len(self.graphs) < 2:
+#             return None
+#         return random.sample(range(len(self.graphs)), 2)
+
+#     def random_merge(self) -> bool:
+#         """Randomly merge two DAGs in the solution. Returns False if it would create a cycle."""
+#         [index_1, index_2] = random.sample(range(len(self.graphs)), 2)
+#         success = self.graphs[index_1].merge_dag(self.graphs[index_2])
+#         if success:
+#             self.graphs.pop(index_2)
+#         return success
+    
+#     def random_decompose(self) -> List[DAG]:
+#         """Randomly decompose a DAG into smaller DAGs"""
+#         index = random.randint(0, len(self.graphs)-1)
+#         target = self.graphs[index]
+        
+#         for order in target.orders.values():
+#             new_dag = DAG()
+#             new_dag.set_depot(target.depot_node)
+#             new_dag.add_order(order)
+#             self.graphs.append(new_dag)
+            
+#         self.graphs.remove(target)
+#         return self.graphs
+
+#     def random_swap(self) -> bool:
+#         """Randomly swap two random orders among 2 given DAGs"""
+#         index_1, index_2 = self.random_pair()
+#         return self.swap(index_1, index_2)
+
+#     def merge_dags(self, index_1: int, index_2: int) -> bool:
+#         """Merge two DAGs in the solution. Returns False if it would create a cycle."""
+#         success = self.graphs[index_1].merge_dag(self.graphs[index_2])
+#         if success:
+#             self.graphs.pop(index_2)
+#         return success
+    
+#     def decompose(self, index: int) -> List[DAG]:
+#         """Decompose a DAG into smaller DAGs"""
+#         target = self.graphs[index]
+        
+#         for order in target.orders.values():
+#             new_dag = DAG()
+#             new_dag.set_depot(target.depot_node)
+#             new_dag.add_order(order)
+#             self.graphs.append(new_dag)
+            
+#         self.graphs.remove(target)
+#         return self.graphs
+    
+#     def swap(self, index_1: int, index_2: int) -> bool:
+#         """Swap two random orders among 2 given DAGs"""
+#         dag_1 = self.graphs[index_1]
+#         dag_2 = self.graphs[index_2]
+#         if len(dag_1.orders) <= 1 and len(dag_2.orders) <= 1:
+#             return False
+#         order_1: OrderItem = random.choice(list(dag_1.orders.values()))
+#         order_2: OrderItem = random.choice(list(dag_2.orders.values()))
+#         if dag_1.add_order(order_2) and dag_2.add_order(order_1):
+#             dag_1.remove_order(order_id=order_1.order_id)
+#             dag_2.remove_order(order_id=order_2.order_id)
+#             return True
+#         return False
+
+#     def copy(self):
+#         new_solution = SASolution()
+#         new_solution.graphs = [dag.copy() for dag in self.graphs]
+#         return new_solution
+
+# def init_solution(orders: List[OrderItem], depot: Location = None, capacity: int = 100) -> SASolution:
+#     """
+#     ## Create a tree representation of the route
+#     """
+#     solution = SASolution()
+#     for order in orders:
+#         dag = DAG()
+#         dag.max_capacity = capacity
+#         dag.add_order(order)
+#         dag.set_depot(depot)
+#         solution.add_graph(dag)
+
+#     return solution

@@ -50,7 +50,7 @@ class OrderItem:
         self.end_location = end_location
         self.demand = demand
         self.ready_time = ready_time
-        self.due_date = due_date
+        self.due_time = due_date
         self.service_time = service_time
         self.distance = self.get_distance()
 
@@ -145,7 +145,15 @@ def load_voratas_vrp(file_path, number_instance) -> Union[List[OrderItem], List[
             if i != j and order_matrix[i][j] > 0:
                 start_location = locations[i]
                 end_location = locations[j]
-                order = OrderItem(i, start_location, end_location, order_matrix[i][j], start_location.ready_time, start_location.due_time, start_location.service_time)
+                order = OrderItem(
+                    i, 
+                    start_location, 
+                    end_location, 
+                    order_matrix[i][j], 
+                    start_location.ready_time, 
+                    start_location.due_time, 
+                    start_location.service_time,
+                )
                 orders.append(order)
 
     return orders, locations, vehicles
@@ -162,15 +170,25 @@ def convert_to_orders(customer_data: List[CustomerInstance]) -> List[OrderItem]:
         orders.append(order)
     return orders
 
-def visualize_orders(orders: List[OrderItem], title="Orders"):
+def visualize_orders(orders: List[OrderItem], vehicles: List[Vehicle], title: str, output_name: str = ''):
     G = nx.DiGraph()
+    vehicle_station: List[int] = [vehicle.start for vehicle in vehicles]
+    vehicle_station = set(vehicle_station)
+
     for order in orders:
-        pickup = order.start_location.id
-        delivery = order.end_location.id
-        G.add_edge(pickup, delivery)
-    pos = nx.spring_layout(G, k=0.8)  # Increase the value of k to increase the distance between nodes
-    nx.draw(G, pos, with_labels=True, arrows=True, node_size=50)
+        G.add_node(order.start_location.id, pos=(order.start_location.x, order.start_location.y))
+        G.add_node(order.end_location.id, pos=(order.end_location.x, order.end_location.y))
+        G.add_edge(order.start_location.id, order.end_location.id, weight=order.distance)
+    
+    pos = nx.get_node_attributes(G, 'pos')
+    plt.figure(figsize=(10, 10))
     plt.title(title)
-    plt.savefig('output/orders.png')
-    print("Orders visualized in output/orders.png")
+    nx.draw(G, pos, with_labels=True, node_size=500, node_color='skyblue', font_size=10, font_weight='bold')
+    nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=7)
+
+    # Highlight vehicle stations in red
+    nx.draw_networkx_nodes(G, pos, nodelist=vehicle_station, node_color='red', node_size=500)
+
+    plt.savefig(f'output/{output_name}.png')
+    print("Orders visualized in output/{output_name}.png")
     # plt.show()
