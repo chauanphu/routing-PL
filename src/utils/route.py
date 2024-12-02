@@ -362,7 +362,7 @@ class DAG:
         new_dag.index_to_id = self.index_to_id.copy()
         return new_dag
     
-class Solution:
+class SASolution:
     def __init__(self):
         self.graphs: List[DAG] = []
 
@@ -454,15 +454,15 @@ class Solution:
         return False
 
     def copy(self):
-        new_solution = Solution()
+        new_solution = SASolution()
         new_solution.graphs = [dag.copy() for dag in self.graphs]
         return new_solution
 
-def init_solution(orders: List[OrderItem], depot: Location = None, capacity: int = 100) -> Solution:
+def init_solution(orders: List[OrderItem], depot: Location = None, capacity: int = 100) -> SASolution:
     """
     ## Create a tree representation of the route
     """
-    solution = Solution()
+    solution = SASolution()
     for order in orders:
         dag = DAG()
         dag.max_capacity = capacity
