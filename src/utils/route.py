@@ -112,51 +112,50 @@ class OrderSet(nx.DiGraph):
         sortings = list(nx.all_topological_sorts(self))
         return sortings
     
-    def weighted_topological_sort(G, weight='weight'):
+    def _get_distance(self, u, v):
+        if self.has_edge(u, v):
+            distance = self.edges[u, v].get('distance', 0)
+        else:
+            start_loc = self.nodes[u]
+            end_loc = self.nodes[v]
+            assert start_loc.get('pos') is not None and end_loc.get('pos') is not None, "Location does not have position"
+            assert start_loc.get('pos') != end_loc.get('pos'), f"Start and end location are the same: {start_loc.get('pos')}"
+            distance = math.sqrt((start_loc['pos'][0] - end_loc['pos'][0]) ** 2 + (start_loc['pos'][1] - end_loc['pos'][1]) ** 2)
+        return distance
+
+    def weighted_topological_sort(self, weight='weight'):
         import heapq
         total_distance = 0
-        current_time = 0
 
         # Calculate in-degree for each node
-        in_degree = {u: 0 for u in G}
-        for u in G:
-            for v in G.successors(u):
+        in_degree = {u: 0 for u in self}
+        for u in self:
+            for v in self.successors(u):
                 in_degree[v] += 1
 
         # Initialize a heap with nodes of zero in-degree
         heap = []
-        for u in G:
+        for u in self:
             if in_degree[u] == 0:
-                w = G.nodes[u].get(weight, 0)
+                w = self.nodes[u].get(weight, 0)
                 heapq.heappush(heap, (w, u))
 
         sorted_nodes = []
+        current_node = None
         while heap:
             w, u = heapq.heappop(heap)
             sorted_nodes.append(u)
-            for v in G.successors(u):
+            if current_node is not None:
+                total_distance += self._get_distance(current_node, u)
+            current_node = u
+            for v in self.successors(u):
                 in_degree[v] -= 1
                 if in_degree[v] == 0:
-                    w_v = G.nodes[v].get(weight, 0)
+                    w_v = self.nodes[v].get(weight, 0)
                     heapq.heappush(heap, (w_v, v))
-                    recorded_distance = G[u][v]['distance']
-                    if recorded_distance > 0:
-                        total_distance += recorded_distance
-                    else:
-                        start_loc = G.nodes[u]
-                        end_loc = G.nodes[v]
-                        start_x, start_y = start_loc['pos']
-                        end_x, end_y = end_loc['pos']
-                        distance = math.sqrt((start_x - end_x) ** 2 + (start_y - end_y) ** 2)
-                        print(f"Start Location {u}: {start_x}, {start_y}")
-                        print(f"End Location {v}: {end_x}, {end_y}")
-                        total_distance += distance
-                        print(f"Distance between {u} and {v}: {distance}")
 
-        if len(sorted_nodes) != len(G):
+        if len(sorted_nodes) != len(self):
             raise nx.NetworkXUnfeasible("Graph contains a cycle.")
-        if total_distance == 0:
-            raise nx.NetworkXUnfeasible("Graph has no edges.")
         
         return sorted_nodes, total_distance
     

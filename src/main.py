@@ -28,7 +28,7 @@ def pso_main():
     # visualize_orders(orders, vehicles=vehicles, title="Aac2", output_name="Aac2")
     psoSolver = PSOSolver()
     psoSolver.init_swarm(orders=orders, vehicles=vehicles)
-    psoSolver.fitness()
+    psoSolver.fitness() 
     # for particle in psoSolver.particles:
     #     print(particle)
     #     print("-"*10)
