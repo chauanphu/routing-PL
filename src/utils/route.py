@@ -64,7 +64,8 @@ class OrderSet(nx.DiGraph):
         super().__init__()
         self.max_capacity = capacity
         self.orders: Dict[int, OrderItem] = {}
-        
+        self.depot: Location = None
+
     def add_order(self, order: OrderItem):
         self.orders[order.order_id] = order
         # Add weight to the existing start node
@@ -126,7 +127,8 @@ class OrderSet(nx.DiGraph):
     def weighted_topological_sort(self, weight='weight'):
         import heapq
         total_distance = 0
-
+        current_weight = 0
+        
         # Calculate in-degree for each node
         in_degree = {u: 0 for u in self}
         for u in self:
@@ -140,11 +142,13 @@ class OrderSet(nx.DiGraph):
                 w = self.nodes[u].get(weight, 0)
                 heapq.heappush(heap, (w, u))
 
-        sorted_nodes = []
+        route = Route()
         current_node = None
         while heap:
             w, u = heapq.heappop(heap)
-            sorted_nodes.append(u)
+            current_location = self.nodes[u]
+            current_location = Location(u, current_location['pos'][0], current_location['pos'][1])
+            route.add_location(current_location)
             if current_node is not None:
                 total_distance += self._get_distance(current_node, u)
             current_node = u
@@ -153,11 +157,12 @@ class OrderSet(nx.DiGraph):
                 if in_degree[v] == 0:
                     w_v = self.nodes[v].get(weight, 0)
                     heapq.heappush(heap, (w_v, v))
-
-        if len(sorted_nodes) != len(self):
+        if len(route) != len(self):
             raise nx.NetworkXUnfeasible("Graph contains a cycle.")
+        if self.depot is not None:
+            route.add_location(self.depot)
         
-        return sorted_nodes, total_distance
+        return route, route.get_cost()
     
     def fitness(self) -> float:
         """

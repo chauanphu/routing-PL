@@ -125,18 +125,24 @@ def load_voratas_vrp(file_path, number_instance) -> Union[List[OrderItem], List[
                     assert line_no >= 12 and line_no <= 32
                     assert index >= 0 and index <= number_instance, f"Index: {index}"
                     order_matrix[line_no-12][index] = int(part)
+
         # Load vehicle information
         if line_no >= 43 and line_no <= 58:
             parts = line.split()
             if len(parts) == 7:
+                for loc in locations:
+                    if loc.id == int(parts[5]):
+                        start_location = loc
+                    if loc.id == int(parts[6]):
+                        end_location = loc
                 vehicle = Vehicle(
                     _id=int(parts[0]),
                     capacity=int(parts[1]),
                     time_limit=int(parts[2]),
                     fixed_cost=int(parts[3]),
                     variable_cost=int(parts[4]),
-                    start=int(parts[5]),
-                    end=int(parts[6])
+                    start=start_location,
+                    end=end_location
                 )
                 vehicles.append(vehicle)
                 
