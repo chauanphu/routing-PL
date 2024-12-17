@@ -28,8 +28,9 @@ class Node:
         return f"Location={self.location.id}, Load={self.load}, NumPickup={self.num_pickup}, InDegree={self.in_degree}, EarliestTime={self.earliest_time}, ServiceTime={self.service_time}"
 
 class Route:
-    def __init__(self):
+    def __init__(self, depot: Location = None):
         self.locations: List[Location] = []
+        self.depot: Location = depot
 
     def get_cost(self) -> float:
         if len(self.locations) < 2:
@@ -60,11 +61,11 @@ class Route:
         return new_route
 
 class OrderSet(nx.DiGraph):
-    def __init__(self, capacity: int = 0):
+    def __init__(self, capacity: int = 0, depot: Location = None):
         super().__init__()
         self.max_capacity = capacity
         self.orders: Dict[int, OrderItem] = {}
-        self.depot: Location = None
+        self.depot: Location = depot
 
     def add_order(self, order: OrderItem):
         self.orders[order.order_id] = order
@@ -142,8 +143,12 @@ class OrderSet(nx.DiGraph):
                 w = self.nodes[u].get(weight, 0)
                 heapq.heappush(heap, (w, u))
 
-        route = Route()
+        # Start the route
+        route = Route(depot=self.depot)
         current_node = None
+        current_load = 0
+        current_time = 0
+
         while heap:
             w, u = heapq.heappop(heap)
             current_location = self.nodes[u]
@@ -151,6 +156,13 @@ class OrderSet(nx.DiGraph):
             route.add_location(current_location)
             if current_node is not None:
                 total_distance += self._get_distance(current_node, u)
+                # Update the current weight
+                current_weight += w
+                current_load += self.nodes[u].get('load', 0)
+                current_time += self.nodes[u].get('service_time', 0)
+                current_time = max(current_time, self.nodes[u].get('earliest_time', 0))
+                current_time += self._get_distance(current_node, u)
+
             current_node = u
             for v in self.successors(u):
                 in_degree[v] -= 1
@@ -159,8 +171,6 @@ class OrderSet(nx.DiGraph):
                     heapq.heappush(heap, (w_v, v))
         if len(route) != len(self):
             raise nx.NetworkXUnfeasible("Graph contains a cycle.")
-        if self.depot is not None:
-            route.add_location(self.depot)
         
         return route, route.get_cost()
     

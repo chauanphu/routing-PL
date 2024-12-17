@@ -29,9 +29,7 @@ def pso_main():
     psoSolver = PSOSolver()
     psoSolver.init_swarm(orders=orders, vehicles=vehicles)
     psoSolver.solve()
-    # for particle in psoSolver.particles:
-    #     print(particle)
-    #     print("-"*10)
+    psoSolver.print_best_solution()
 
 if __name__ == "__main__":
     pso_main()
