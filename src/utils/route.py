@@ -39,7 +39,9 @@ class Route:
         for i in range(len(self.locations) - 1):
             current_loc = self.locations[i]
             next_loc = self.locations[i + 1]
-            cost += math.sqrt((current_loc.x - next_loc.x) ** 2 + (current_loc.y - next_loc.y) ** 2)
+            next_distance = ((current_loc.x - next_loc.x) ** 2 + (current_loc.y - next_loc.y) ** 2) ** 0.5
+            cost += next_distance
+            
         return cost
 
     def __len__(self) -> int:
@@ -67,7 +69,7 @@ class OrderSet(nx.DiGraph):
         self.orders: Dict[int, OrderItem] = {}
         self.depot: Location = depot
 
-    def add_order(self, order: OrderItem):
+    def add_order(self, order: OrderItem, priority: float):
         self.orders[order.order_id] = order
         # Add weight to the existing start node
         start_loc = order.start_location
@@ -78,6 +80,7 @@ class OrderSet(nx.DiGraph):
         if start_id in self.nodes:
             self.nodes[start_id]['load'] += order.demand
             self.nodes[start_id]['num_pickup'] += 1
+            self.nodes[start_id]['weight'] += priority
             # due_time = self.nodes[start_id]['due_time']
             # self.nodes[start_id]['due_time'] = min(due_time, order.due_time)
         else:
@@ -85,9 +88,8 @@ class OrderSet(nx.DiGraph):
                 start_id, 
                 load=order.demand,
                 num_pickup=1, 
-                service_time=start_loc.service_time,
-                due_time=start_loc.due_time,
-                pos=(start_loc.x, start_loc.y)
+                loc=start_loc,
+                weight=priority,
             )
 
         if not end_id in self.nodes:
@@ -95,9 +97,8 @@ class OrderSet(nx.DiGraph):
                 end_id, 
                 load=0,
                 num_pickup=0, 
-                service_time=end_loc.service_time,
-                due_time=end_loc.due_time,
-                pos=(end_loc.x, end_loc.y)
+                loc=end_loc,
+                weight=0,
             )
         
         if not self.has_edge(start_id, end_id):
@@ -117,14 +118,14 @@ class OrderSet(nx.DiGraph):
         if self.has_edge(u, v):
             distance = self.edges[u, v].get('distance', 0)
         else:
-            start_loc = self.nodes[u]
-            end_loc = self.nodes[v]
-            assert start_loc.get('pos') is not None and end_loc.get('pos') is not None, "Location does not have position"
-            assert start_loc.get('pos') != end_loc.get('pos'), f"Start and end location are the same: {start_loc.get('pos')}"
-            distance = math.sqrt((start_loc['pos'][0] - end_loc['pos'][0]) ** 2 + (start_loc['pos'][1] - end_loc['pos'][1]) ** 2)
+            start_loc: Location = self.nodes[u]['loc']
+            end_loc: Location = self.nodes[v]['loc']
+            # Ensure not to calculate the distance of the same node
+            assert start_loc != end_loc, f"Start={start_loc}, End={end_loc}"
+            distance = ((start_loc.x - end_loc.x) ** 2 + (start_loc.y - end_loc.y) ** 2) ** 0.5
         return distance
 
-    def weighted_topological_sort(self, weight='weight'):
+    def weighted_topological_sort(self, weight='weight', allow_early=True) -> Route:
         import heapq
         total_distance = 0
         current_weight = 0
@@ -151,7 +152,7 @@ class OrderSet(nx.DiGraph):
         while heap:
             w, u = heapq.heappop(heap)
             current_location = self.nodes[u]
-            current_location = Location(u, current_location['pos'][0], current_location['pos'][1])
+            current_location: Location = current_location['loc']
             route.add_location(current_location)
             if current_node is not None:
                 total_distance += self._get_distance(current_node, u)
@@ -159,12 +160,14 @@ class OrderSet(nx.DiGraph):
                 current_weight += w
                 current_load += self.nodes[u]['load']
                 # Time progress: distance + service time of the current node
-                current_time += total_distance + self.nodes[current_node]['service_time']
+                current_time += total_distance + current_location.service_time
+                if not allow_early:
+                    current_time = max(current_time, current_location.ready_time)
             
             # Apply constraints:
             if current_load > self.max_capacity:
                 raise nx.NetworkXUnfeasible("Vehicle capacity exceeded")
-            if current_time > self.nodes[u]['due_time']:
+            if current_time > current_location.due_time:
                 raise nx.NetworkXUnfeasible("Time constraint violated")
             
             current_node = u

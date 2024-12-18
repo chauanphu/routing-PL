@@ -3,7 +3,7 @@ from utils.route import OrderSet, Route
 from typing import List
 from utils.load_data import OrderItem, Vehicle
 import numpy as np
-from utils.config import COGNITIVE_WEIGHT, SOCIAL_WEIGHT, INFEASIBILITY_PENALTY, INERTIA
+from utils.config import COGNITIVE_WEIGHT, SOCIAL_WEIGHT, INFEASIBILITY_PENALTY, INERTIA, ALLOW_EARLY
 
 class PSOParticle:
     def __init__(self, orders: List[OrderItem], vehicles: List[Vehicle]):
@@ -14,9 +14,9 @@ class PSOParticle:
         self.vehicles: List[Vehicle] = vehicles
         self.solutions: List[Route] = []
 
-        self.positions = np.random.uniform(0, num_vehicle, num_order) # Dim: [1, num_order], Value in [0, num_vehicle)
+        self.positions = np.random.uniform(0, num_vehicle, num_order * 2) # Dim: [1, 2 * num_order], pairs of (assigned vehicle, priority)
         
-        self.velocity = np.random.rand(num_order)
+        self.velocity = np.random.rand(num_order * 2) # Dim: [1, 2 * num_order]
         self.p_best = None
         self.p_fitness = None
         # Parameters
@@ -42,13 +42,18 @@ class PSOParticle:
         3. Update the depot of each OrderSet
         """
         self.order_sets: List[OrderSet] = [OrderSet(capacity=v.capacity, depot=v.start) for v in self.vehicles]
-        assignment = np.round(self.positions)
+        # The first half of the position is the vehicle assignment, the second half is the priority
+        assignment = self.positions[:len(self.orders)]
+        priority = self.positions[len(self.orders):]
+        assignment = np.round(assignment)
+        i = 0
         ## Assign orders to vehicles
-        for i in range(len(assignment)):
-            vehicle_id = int(assignment[i]) - 1
-            order = self.orders[i]
-            self.order_sets[vehicle_id].add_order(order)
-        self.order_sets = [o for o in self.order_sets if o.orders]
+        for _assign, _priority, order in zip(assignment, priority, self.orders):
+            i += 1
+            vehicle_id = int(_assign) - 1
+            order_set = self.order_sets[vehicle_id]
+            order_set.add_order(order, priority=float(_priority))
+        self.order_sets = [o for o in self.order_sets if not o.isEmpty()]
             
     def print_solution(self):
         print("Solution")
@@ -62,7 +67,7 @@ class PSOParticle:
                 print("-", order)
             print("Route")
             if nx.is_directed_acyclic_graph(order_set):
-                route = order_set.weighted_topological_sort(weight="due_time")
+                route = order_set.weighted_topological_sort(weight="due_time", allow_early=ALLOW_EARLY)
                 print(route)
             else:
                 print("Not a DAG")
@@ -93,7 +98,7 @@ class PSOParticle:
                     self.p_best = np.copy(self.positions)
                 return
             try:
-                route, total_distance = order_set.weighted_topological_sort(weight="due_time")
+                route, total_distance = order_set.weighted_topological_sort(weight="due_time", allow_early=ALLOW_EARLY)
             except nx.NetworkXUnfeasible as e:
                 # print(e)
                 fitness = INFEASIBILITY_PENALTY
@@ -109,36 +114,6 @@ class PSOParticle:
                 return
         self.p_fitness = fitness
         self.p_best = np.copy(self.positions)
-
-    def evaluate_position(self, position: np.ndarray):
-        """
-        Evaluate the fitness of the swarms. Decode into route then calculate the total distance
-        """
-        order_sets: List[OrderSet] = [OrderSet(v.capacity) for v in self.vehicles]
-        assignment = np.round(position)
-        fitness = 0
-        for i in range(len(assignment)):
-            vehicle_id = int(assignment[i]) - 1
-            vehicle = self.vehicles[vehicle_id]
-            order = self.orders[i]
-            order_sets[vehicle_id].add_order(order)
-            order_sets[vehicle_id].depot = vehicle.start
-        order_sets = [o for o in order_sets if o.orders]
-
-        for order_set in order_sets:
-            if order_set.isEmpty():
-                continue
-            
-            if not nx.is_directed_acyclic_graph(order_set):
-                return INFEASIBILITY_PENALTY
-            try:
-                _, total_distance = order_set.weighted_topological_sort(weight="due_time")
-            except nx.NetworkXUnfeasible as e:
-                print(e)
-                return INFEASIBILITY_PENALTY
-            fitness += total_distance
-        return fitness
         
-
     def __repr__(self) -> str:
         return f"Particle: {self.positions} Fitness: {self.fitness:.2f}"

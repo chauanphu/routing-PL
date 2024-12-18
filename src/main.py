@@ -2,7 +2,7 @@ from utils.load_data import load_voratas_vrp
 import logging
 from matplotlib import pyplot as plt
 from utils.solver import PSOSolver
-from utils.config import POPULATION_SIZE, MAX_ITER
+from utils.config import POPULATION_SIZE, MAX_ITER, ALLOW_EARLY
 logging.basicConfig(level=logging.INFO)
 import networkx as nx
 
@@ -46,7 +46,9 @@ def pso_main():
     with open('output/pso.best_solution.txt', 'w') as f:
         f.write(f"Best Fitness: {psoSolver.g_fitness}\n")
         f.write(f"Number of vehicles used: {len(psoSolver.final_solution)}\n")
+        f.write(f"Number of orders: {sum([len(o.orders) for o in psoSolver.final_solution])}\n")
         f.write("Best Solution\n")
+        f.write("-"*20 + "\n")
         for order_set in psoSolver.final_solution:
             if not order_set.orders:
                 continue
@@ -55,7 +57,7 @@ def pso_main():
                 f.write(f"- {order}\n")
             f.write("Route\n")
             if nx.is_directed_acyclic_graph(order_set):
-                route, route_cost = order_set.weighted_topological_sort(weight="due_time")
+                route, route_cost = order_set.weighted_topological_sort(weight="due_time", allow_early=ALLOW_EARLY)
                 f.write(f"- {route}\n")
             f.write("-"*10 + "\n")
             
