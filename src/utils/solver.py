@@ -20,7 +20,8 @@ class PSOSolver:
         self.particles: List[PSOParticle] = []
         self.locations: List[Location] = [] # [1, 2R]; R = number of orders
         self.particle_history = [] # Add this line to store particle histories
-    
+        self.final_solution = None
+
     def reset_swarm(self):
         self.g_best = []
         self.g_fitness = 0
@@ -80,6 +81,7 @@ class PSOSolver:
                 if particle.p_fitness < self.g_fitness:
                     self.g_best = particle.p_best
                     self.g_fitness = particle.p_fitness
+                    self.final_solution = particle.order_sets
                 if particle.p_fitness < p_fitness or p_fitness == 0:
                     p_fitness = particle.p_fitness
 
@@ -87,6 +89,7 @@ class PSOSolver:
             history['p_fitness'] = p_fitness
 
             print(f"Global Best Fitness: {self.g_fitness:.2f}")
+
         return history
     
     def print_solution(self):

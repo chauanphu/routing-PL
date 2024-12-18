@@ -3,6 +3,7 @@ from utils.route import OrderSet, Route
 from typing import List
 from utils.load_data import OrderItem, Vehicle
 import numpy as np
+from utils.config import COGNITIVE_WEIGHT, SOCIAL_WEIGHT, INFEASIBILITY_PENALTY, INERTIA
 
 class PSOParticle:
     def __init__(self, orders: List[OrderItem], vehicles: List[Vehicle]):
@@ -19,9 +20,9 @@ class PSOParticle:
         self.p_best = None
         self.p_fitness = None
         # Parameters
-        self.inertia = 0.72984 # [0, 1]
-        self.c1 = 2.05 # [0, 2]
-        self.c2 = 2.05 # [0, 2]
+        self.inertia = INERTIA
+        self.c1 = COGNITIVE_WEIGHT
+        self.c2 = SOCIAL_WEIGHT
 
     def setup(self):
         """
@@ -86,9 +87,9 @@ class PSOParticle:
             if order_set.isEmpty():
                 continue
             if not nx.is_directed_acyclic_graph(order_set):
-                fitness = 10000 # A very large number
+                fitness = INFEASIBILITY_PENALTY # A very large number
                 if self.p_fitness is None:
-                    self.p_fitness = 10000
+                    self.p_fitness = INFEASIBILITY_PENALTY
                     self.p_best = np.copy(self.positions)
                 return
             
@@ -121,12 +122,12 @@ class PSOParticle:
                 continue
             
             if not nx.is_directed_acyclic_graph(order_set):
-                return 500
+                return INFEASIBILITY_PENALTY
             try:
                 _, total_distance = order_set.weighted_topological_sort(weight="due_time")
             except nx.NetworkXUnfeasible as e:
                 print(e)
-                return 500
+                return INFEASIBILITY_PENALTY
             fitness += total_distance
         return fitness
         
