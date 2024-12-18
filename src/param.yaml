@@ -1,0 +1,7 @@
+PSO:
+  population_size: 100
+  inertia_weight: 0.5
+  cognitive_weight: 1.5
+  social_weight: 1.5
+  max_velocity: 0.5
+  infeasbiility_penalty: 1000

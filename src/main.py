@@ -1,8 +1,9 @@
-from utils.load_data import Location, convert_to_orders, load_solomon_vrp, load_voratas_vrp, visualize_orders
+from utils.load_data import load_voratas_vrp
 import logging
 from matplotlib import pyplot as plt
 from utils.solver import PSOSolver
 logging.basicConfig(level=logging.INFO)
+import yaml
 
 # def sa_main():
 #     # Load the Solomon VRP benchmark file
