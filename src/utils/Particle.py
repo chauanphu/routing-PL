@@ -92,8 +92,16 @@ class PSOParticle:
                     self.p_fitness = INFEASIBILITY_PENALTY
                     self.p_best = np.copy(self.positions)
                 return
+            try:
+                route, total_distance = order_set.weighted_topological_sort(weight="due_time")
+            except nx.NetworkXUnfeasible as e:
+                # print(e)
+                fitness = INFEASIBILITY_PENALTY
+                if self.p_fitness is None:
+                    self.p_fitness = INFEASIBILITY_PENALTY
+                    self.p_best = np.copy(self.positions)
+                return
             
-            route, total_distance = order_set.weighted_topological_sort(weight="due_time")
             fitness += total_distance
             self.solutions.append(route)
         if self.p_fitness:

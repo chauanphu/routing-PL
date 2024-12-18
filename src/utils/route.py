@@ -78,16 +78,15 @@ class OrderSet(nx.DiGraph):
         if start_id in self.nodes:
             self.nodes[start_id]['load'] += order.demand
             self.nodes[start_id]['num_pickup'] += 1
-            self.nodes[start_id]['service_time'] += order.service_time
-            due_time = self.nodes[start_id]['due_time']
-            self.nodes[start_id]['due_time'] = min(due_time, order.due_time)
+            # due_time = self.nodes[start_id]['due_time']
+            # self.nodes[start_id]['due_time'] = min(due_time, order.due_time)
         else:
             self.add_node(
                 start_id, 
                 load=order.demand,
                 num_pickup=1, 
-                service_time=order.service_time,
-                due_time=order.due_time,
+                service_time=start_loc.service_time,
+                due_time=start_loc.due_time,
                 pos=(start_loc.x, start_loc.y)
             )
 
@@ -96,8 +95,8 @@ class OrderSet(nx.DiGraph):
                 end_id, 
                 load=0,
                 num_pickup=0, 
-                service_time=0,
-                due_time=0,
+                service_time=end_loc.service_time,
+                due_time=end_loc.due_time,
                 pos=(end_loc.x, end_loc.y)
             )
         
@@ -158,11 +157,16 @@ class OrderSet(nx.DiGraph):
                 total_distance += self._get_distance(current_node, u)
                 # Update the current weight
                 current_weight += w
-                current_load += self.nodes[u].get('load', 0)
-                current_time += self.nodes[u].get('service_time', 0)
-                current_time = max(current_time, self.nodes[u].get('earliest_time', 0))
-                current_time += self._get_distance(current_node, u)
-
+                current_load += self.nodes[u]['load']
+                # Time progress: distance + service time of the current node
+                current_time += total_distance + self.nodes[current_node]['service_time']
+            
+            # Apply constraints:
+            if current_load > self.max_capacity:
+                raise nx.NetworkXUnfeasible("Vehicle capacity exceeded")
+            if current_time > self.nodes[u]['due_time']:
+                raise nx.NetworkXUnfeasible("Time constraint violated")
+            
             current_node = u
             for v in self.successors(u):
                 in_degree[v] -= 1
