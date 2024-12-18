@@ -12,19 +12,21 @@ random.seed(42)
 
 
 class PSOSolver:
-    def __init__(self):
-        self.n_particles = 10
-        self.n_iterations = 50
+    def __init__(self, n_particles=1000, n_iterations=50):
+        self.n_particles = n_particles
+        self.n_iterations = n_iterations
         self.g_best = [] # Best position
         self.g_fitness = 0 # Best fitness
         self.particles: List[PSOParticle] = []
         self.locations: List[Location] = [] # [1, 2R]; R = number of orders
+        self.particle_history = [] # Add this line to store particle histories
     
     def reset_swarm(self):
         self.g_best = []
         self.g_fitness = 0
         self.particles = []
         self.locations = []
+        self.particle_history = [] # Add this line
         return
     
     def init_swarm(self, orders: List[OrderItem], vehicles: List[Vehicle]):
@@ -33,10 +35,11 @@ class PSOSolver:
         p_fitness = 0
         for _ in range(self.n_particles):
             particle = PSOParticle(orders, vehicles)
+            particle.setup()
             self.particles.append(particle)
-            if particle.best_fitness < p_fitness or p_fitness == 0:
-                p_best = particle.best_position
-                p_fitness = particle.best_fitness
+            if particle.p_fitness < p_fitness or p_fitness == 0:
+                p_best = particle.p_best
+                p_fitness = particle.p_fitness
         self.g_best = p_best
         self.g_fitness = p_fitness
         for order in orders:
@@ -50,26 +53,42 @@ class PSOSolver:
         """
         for particle in self.particles:
             particle.decode()
-            # particle.print_solution()
             particle.update_fitness()
-            if particle.best_fitness < self.g_fitness or self.g_fitness == 0:
-                self.g_best = particle.best_position
-                self.g_fitness = particle.best_fitness
+            if particle.p_fitness < self.g_fitness or self.g_fitness == 0:
+                self.g_best = particle.p_best
+                self.g_fitness = particle.p_fitness
 
     def solve(self):
         print("Initial Best Fitness:", self.g_fitness)
+        history = {
+            'fitness': [],
+            'particle_fitness': [[] for _ in range(self.n_particles)]  # Track each particle's fitness
+        }
+        
         for i in range(self.n_iterations):
-            print(f"Iteration: {i+1}/{self.n_iterations}")
-            for particle in self.particles:
+            print(f"Iteration: {i+1}/{self.n_iterations}", end='\t')
+            p_fitness = 0
+
+            for idx, particle in enumerate(self.particles):
                 particle.update_velocity(self.g_best)
                 particle.update_position()
                 particle.decode()
-                particle.evaluate_position(particle.positions)
-                if particle.best_fitness < self.g_fitness:
-                    self.g_best = particle.best_position
-                    self.g_fitness = particle.best_fitness
-            print(f"Global Best Fitness: {self.g_fitness:.2f}")
+                particle.update_fitness()
+                # Store particle's personal best fitness
+                history['particle_fitness'][idx].append(particle.p_fitness)
+                
+                if particle.p_fitness < self.g_fitness:
+                    self.g_best = particle.p_best
+                    self.g_fitness = particle.p_fitness
+                if particle.p_fitness < p_fitness or p_fitness == 0:
+                    p_fitness = particle.p_fitness
 
+            history['fitness'].append(self.g_fitness)
+            history['p_fitness'] = p_fitness
+
+            print(f"Global Best Fitness: {self.g_fitness:.2f}")
+        return history
+    
     def print_solution(self):
         for particle in self.particles:
             particle.decode()
@@ -81,9 +100,9 @@ class PSOSolver:
         best_particle = None
         best_fitness = 0
         for particle in self.particles:
-            if particle.best_fitness < best_fitness or best_fitness == 0:
+            if particle.p_fitness < best_fitness or best_fitness == 0:
                 best_particle = particle
-                best_fitness = particle.best_fitness
+                best_fitness = particle.p_fitness
         best_particle.decode()
         best_particle.print_solution()
         print("-"*10)

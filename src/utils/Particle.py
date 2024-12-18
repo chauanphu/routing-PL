@@ -16,12 +16,19 @@ class PSOParticle:
         self.positions = np.random.uniform(0, num_vehicle, num_order) # Dim: [1, num_order], Value in [0, num_vehicle)
         
         self.velocity = np.random.rand(num_order)
-        self.fitness = self.evaluate_position(self.positions)
-        self.best_position = np.random.uniform(0, num_vehicle, num_order)
-        self.best_fitness = self.evaluate_position(self.best_position)
+        self.p_best = None
+        self.p_fitness = None
+        # Parameters
         self.inertia = 0.72984 # [0, 1]
         self.c1 = 2.05 # [0, 2]
         self.c2 = 2.05 # [0, 2]
+
+    def setup(self):
+        """
+        Setup the particle with random positions and velocities
+        """
+        self.decode()
+        self.update_fitness()
 
     def decode(self):
         """
@@ -40,6 +47,7 @@ class PSOParticle:
             vehicle_id = int(assignment[i]) - 1
             order = self.orders[i]
             self.order_sets[vehicle_id].add_order(order)
+        self.order_sets = [o for o in self.order_sets if o.orders]
             
     def print_solution(self):
         print("Solution")
@@ -66,27 +74,32 @@ class PSOParticle:
         assert np.equal(previous_pos, self.positions).all() == False, "Position not updated"
        
     def update_velocity(self, global_best: np.ndarray):
-        cognitive_component = self.c1 * np.random.rand() * (self.best_position - self.positions)
+        cognitive_component = self.c1 * np.random.rand() * (self.p_best - self.positions)
         social_component = self.c2 * np.random.rand() * (global_best - self.positions)
         self.velocity = self.inertia * self.velocity + cognitive_component + social_component
 
     def update_fitness(self):
         total_distance = 0
         self.solutions = []
+        fitness = 0
         for order_set in self.order_sets:
-            if not order_set.orders:
+            if order_set.isEmpty():
                 continue
             if not nx.is_directed_acyclic_graph(order_set):
-                self.fitness = 10000 # A very large number
-                return self.fitness
+                fitness = 10000 # A very large number
+                if self.p_fitness is None:
+                    self.p_fitness = 10000
+                    self.p_best = np.copy(self.positions)
+                return
             
             route, total_distance = order_set.weighted_topological_sort(weight="due_time")
-            self.fitness += total_distance
+            fitness += total_distance
             self.solutions.append(route)
-
-        if self.fitness < self.best_fitness or self.best_fitness == 0:
-            self.best_fitness = self.fitness
-            self.best_position = self.positions
+        if self.p_fitness:
+            if fitness > self.p_fitness:
+                return
+        self.p_fitness = fitness
+        self.p_best = np.copy(self.positions)
 
     def evaluate_position(self, position: np.ndarray):
         """
@@ -101,16 +114,19 @@ class PSOParticle:
             order = self.orders[i]
             order_sets[vehicle_id].add_order(order)
             order_sets[vehicle_id].depot = vehicle.start
+        order_sets = [o for o in order_sets if o.orders]
+
         for order_set in order_sets:
-            if not order_set.orders:
+            if order_set.isEmpty():
                 continue
+            
             if not nx.is_directed_acyclic_graph(order_set):
-                return 10000
+                return 500
             try:
                 _, total_distance = order_set.weighted_topological_sort(weight="due_time")
             except nx.NetworkXUnfeasible as e:
                 print(e)
-                return 10000
+                return 500
             fitness += total_distance
         return fitness
         

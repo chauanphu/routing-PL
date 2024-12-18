@@ -1,6 +1,6 @@
 from utils.load_data import Location, convert_to_orders, load_solomon_vrp, load_voratas_vrp, visualize_orders
 import logging
-
+from matplotlib import pyplot as plt
 from utils.solver import PSOSolver
 logging.basicConfig(level=logging.INFO)
 
@@ -26,10 +26,21 @@ def pso_main():
     print("Number of locations:", len(locations))
     print("Number of vehicles:", len(vehicles))
     # visualize_orders(orders, vehicles=vehicles, title="Aac2", output_name="Aac2")
-    psoSolver = PSOSolver()
+    psoSolver = PSOSolver(n_particles=200, n_iterations=50)
     psoSolver.init_swarm(orders=orders, vehicles=vehicles)
-    psoSolver.solve()
-    psoSolver.print_best_solution()
+    history = psoSolver.solve()
+    # Plot the line of the best fitness and the personal best fitness
+    plt.plot(history['fitness'], label='Global Best')   
+    plt.plot(history['p_fitness'], label='Personal Best')
+
+    plt.show()
+    plt.savefig('output/pso_fitness.png')
+
+    # Logging the change of the first particle fitness into a file.txt
+    with open('output/pso_particle_history.txt', 'w') as f:
+        for i in range(len(history['particle_fitness'][1])):
+            f.write(f"{i+1}: {history['particle_fitness'][1][i]}\n")
+    print("Done")
 
 if __name__ == "__main__":
     pso_main()
