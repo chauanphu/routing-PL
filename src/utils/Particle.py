@@ -49,12 +49,16 @@ class PSOParticle:
         i = 0
         ## Assign orders to vehicles
         for _assign, _priority, order in zip(assignment, priority, self.orders):
-            i += 1
-            vehicle_id = int(_assign) - 1
+            vehicle_id = int(_assign)
             order_set = self.order_sets[vehicle_id]
+            previous_order = len(order_set.orders)
             order_set.add_order(order, priority=float(_priority))
+            assert len(order_set.orders) == previous_order + 1, "Order not added"
+            i += 1
         self.order_sets = [o for o in self.order_sets if not o.isEmpty()]
-            
+        served_orders = sum([len(o.orders) for o in self.order_sets])
+        assert served_orders == len(self.orders), f"Served orders not equal to total orders: {served_orders} != {len(self.orders)}"
+        
     def print_solution(self):
         print("Solution")
         print("Used Vehicles:", len([o for o in self.order_sets if o.orders]))
@@ -89,8 +93,6 @@ class PSOParticle:
         self.solutions = []
         fitness = 0
         for order_set in self.order_sets:
-            if order_set.isEmpty():
-                continue
             if not nx.is_directed_acyclic_graph(order_set):
                 fitness = INFEASIBILITY_PENALTY # A very large number
                 if self.p_fitness is None:

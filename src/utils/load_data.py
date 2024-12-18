@@ -145,14 +145,14 @@ def load_voratas_vrp(file_path, number_instance) -> Union[List[OrderItem], List[
                     end=end_location
                 )
                 vehicles.append(vehicle)
-                
+    order_id = 0
     for i in range(order_matrix.shape[0]):
         for j in range(order_matrix.shape[1]):
             if i != j and order_matrix[i][j] > 0:
                 start_location = locations[i]
                 end_location = locations[j]
                 order = OrderItem(
-                    i, 
+                    order_id, 
                     start_location, 
                     end_location, 
                     order_matrix[i][j], 
@@ -161,6 +161,7 @@ def load_voratas_vrp(file_path, number_instance) -> Union[List[OrderItem], List[
                     start_location.service_time,
                 )
                 orders.append(order)
+                order_id += 1
 
     return orders, locations, vehicles
 

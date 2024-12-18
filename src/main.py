@@ -23,7 +23,7 @@ import networkx as nx
 #         json.dump(history, f)
 
 def pso_main():
-    orders, locations, vehicles  = load_voratas_vrp('benchmark/mdpdr/Aac1.txt', 20)
+    orders, locations, vehicles  = load_voratas_vrp('benchmark/mdpdr/Bac1.txt', 20)
     print("Number of orders:", len(orders))
     print("Number of locations:", len(locations))
     print("Number of vehicles:", len(vehicles))
