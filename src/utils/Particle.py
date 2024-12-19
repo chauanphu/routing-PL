@@ -1,6 +1,6 @@
 import networkx as nx
 from utils.route import OrderSet, Route 
-from typing import List
+from typing import List, Tuple
 from utils.load_data import OrderItem, Vehicle
 import numpy as np
 from utils.config import COGNITIVE_WEIGHT, SOCIAL_WEIGHT, INFEASIBILITY_PENALTY, INERTIA, ALLOW_EARLY
@@ -31,7 +31,7 @@ class PSOParticle:
         self.decode()
         self.update_fitness()
 
-    def decode(self):
+    def decode(self) -> Tuple[List[OrderSet], List[bool]]:
         """
         Decoding function, assign orders to vehicles based on the position
 
@@ -58,7 +58,7 @@ class PSOParticle:
         self.order_sets = [o for o in self.order_sets if not o.isEmpty()]
         served_orders = sum([len(o.orders) for o in self.order_sets])
         assert served_orders == len(self.orders), f"Served orders not equal to total orders: {served_orders} != {len(self.orders)}"
-        
+
     def print_solution(self):
         print("Solution")
         print("Used Vehicles:", len([o for o in self.order_sets if o.orders]))
