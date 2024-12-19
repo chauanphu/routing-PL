@@ -4,25 +4,8 @@ import random
 from multiprocessing import Pool
 
 class SASolution:
-    def __init__(self):
-        self.graphs: List[OrderSet] = []
-
-    @staticmethod
-    def _compute_fitness(graph: OrderSet) -> float:
-        return graph.fitness()[0]
-        
-    def total_distance(self) -> float:
-        with Pool() as pool:
-            distances = pool.map(self._compute_fitness, self.graphs)
-            return sum(distances)
-
-    def add_order(self, order: OrderItem):
-        dag = OrderSet()
-        dag.add_order(order)
-        self.graphs.append(dag)
-
-    def add_graph(self, graph: OrderSet):
-        self.graphs.append(graph)
+    def __init__(self, orders: List[OrderSet] = None):
+        self.graphs: List[OrderSet] = orders
 
     def get_graphs(self) -> List[OrderSet]:
         return self.graphs
@@ -41,19 +24,19 @@ class SASolution:
             self.graphs.pop(index_2)
         return success
     
-    def random_decompose(self) -> List[OrderSet]:
-        """Randomly decompose a OrderSet into smaller DAGs"""
-        index = random.randint(0, len(self.graphs)-1)
-        target = self.graphs[index]
+    # def random_decompose(self) -> List[OrderSet]:
+    #     """Randomly decompose a OrderSet into smaller DAGs"""
+    #     index = random.randint(0, len(self.graphs)-1)
+    #     target = self.graphs[index]
         
-        for order in target.orders.values():
-            new_dag = OrderSet()
-            new_dag.set_depot(target.depot_node)
-            new_dag.add_order(order)
-            self.graphs.append(new_dag)
+    #     for order in target.orders.values():
+    #         new_dag = OrderSet()
+    #         new_dag.set_depot(target.depot_node)
+    #         new_dag.add_order(order)
+    #         self.graphs.append(new_dag)
             
-        self.graphs.remove(target)
-        return self.graphs
+    #     self.graphs.remove(target)
+    #     return self.graphs
 
     def random_swap(self) -> bool:
         """Randomly swap two random orders among 2 given DAGs"""
@@ -66,18 +49,6 @@ class SASolution:
         if success:
             self.graphs.pop(index_2)
         return success
-    
-    def decompose(self, index: int) -> List[OrderSet]:
-        """Decompose a OrderSet into smaller DAGs"""
-        target = self.graphs[index]
-        
-        for order in target.orders.values():
-            new_dag = OrderSet(depot=target.depot_node)
-            new_dag.add_order(order)
-            self.graphs.append(new_dag)
-            
-        self.graphs.remove(target)
-        return self.graphs
     
     def swap(self, index_1: int, index_2: int) -> bool:
         """Swap two random orders among 2 given DAGs"""
@@ -92,6 +63,18 @@ class SASolution:
             dag_2.remove_order(order_id=order_2.order_id)
             return True
         return False
+    
+    # def decompose(self, index: int) -> List[OrderSet]:
+    #     """Decompose a OrderSet into smaller DAGs"""
+    #     target = self.graphs[index]
+        
+    #     for order in target.orders.values():
+    #         new_dag = OrderSet(depot=target.depot_node)
+    #         new_dag.add_order(order)
+    #         self.graphs.append(new_dag)
+            
+    #     self.graphs.remove(target)
+    #     return self.graphs
 
     def copy(self):
         new_solution = SASolution()
