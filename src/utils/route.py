@@ -2,6 +2,7 @@ import math
 from typing import Dict, List
 from utils.load_data import Location, OrderItem
 import networkx as nx
+import heapq
 
 class Node:
     location: Location
@@ -102,7 +103,9 @@ class OrderSet(nx.DiGraph):
             )
         
         if not self.has_edge(start_id, end_id):
-            self.add_edge(start_id, end_id, distance=order.distance)
+            self.add_edge(start_id, end_id, distance=order.distance, load=order.demand)
+        else:
+            self.edges[start_id, end_id]['load'] += order.demand
 
     def remove_order(self, order: OrderItem):
         self.remove_node(order.start_location.id)
@@ -116,7 +119,7 @@ class OrderSet(nx.DiGraph):
     
     def _get_distance(self, u, v):
         if self.has_edge(u, v):
-            distance = self.edges[u, v].get('distance', 0)
+            distance = self.edges[u, v]['distance']
         else:
             start_loc: Location = self.nodes[u]['loc']
             end_loc: Location = self.nodes[v]['loc']
@@ -126,52 +129,59 @@ class OrderSet(nx.DiGraph):
         return distance
 
     def weighted_topological_sort(self, weight='weight', allow_early=True) -> Route:
-        import heapq
-        total_distance = 0
-        current_weight = 0
+        # Define a helper function to calculate the unload at a node
+        def _get_unload(visited: Route, u: int) -> int:
+            unload = 0
+            for v in visited.locations:
+                v_id = v.id
+                if self.has_edge(v_id, u):
+                    unload += self.edges[v_id, u]['load']
+            return unload
         
         # Calculate in-degree for each node
         in_degree = {u: 0 for u in self}
-        for u in self:
-            for v in self.successors(u):
+        for next_node in self:
+            for v in self.successors(next_node):
                 in_degree[v] += 1
 
         # Initialize a heap with nodes of zero in-degree
         heap = []
-        for u in self:
-            if in_degree[u] == 0:
-                w = self.nodes[u].get(weight, 0)
-                heapq.heappush(heap, (w, u))
+        for next_node in self:
+            if in_degree[next_node] == 0:
+                w = self.nodes[next_node].get(weight, 0)
+                heapq.heappush(heap, (w, next_node))
 
         # Start the route
         route = Route(depot=self.depot)
+        total_distance = 0
         current_node = None
         current_load = 0
         current_time = 0
 
         while heap:
-            w, u = heapq.heappop(heap)
-            current_location = self.nodes[u]
-            current_location: Location = current_location['loc']
-            route.add_location(current_location)
+            w, next_node = heapq.heappop(heap) # u is the next node
+            next_location = self.nodes[next_node]
+            next_location: Location = next_location['loc']
+            current_load += self.nodes[next_node]['load']
+            
             if current_node is not None:
-                total_distance += self._get_distance(current_node, u)
+                total_distance += self._get_distance(current_node, next_node)
                 # Update the current weight
-                current_weight += w
-                current_load += self.nodes[u]['load']
+                current_load -= _get_unload(route, next_node)
                 # Time progress: distance + service time of the current node
-                current_time += total_distance + current_location.service_time
+                current_time += total_distance + next_location.service_time
                 if not allow_early:
-                    current_time = max(current_time, current_location.ready_time)
+                    current_time = max(current_time, next_location.ready_time)
+            route.add_location(next_location)
             
             # Apply constraints:
             if current_load > self.max_capacity:
                 raise nx.NetworkXUnfeasible("Vehicle capacity exceeded")
-            if current_time > current_location.due_time:
+            if current_time > next_location.due_time:
                 raise nx.NetworkXUnfeasible("Time constraint violated")
             
-            current_node = u
-            for v in self.successors(u):
+            current_node = next_node # Assign the u to the current node
+            for v in self.successors(next_node):
                 in_degree[v] -= 1
                 if in_degree[v] == 0:
                     w_v = self.nodes[v].get(weight, 0)
