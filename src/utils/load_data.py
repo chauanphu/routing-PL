@@ -5,6 +5,7 @@ from typing import List, Union
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+import pandas as pd
 
 class VehicleInstance:
     def __init__(self, number, capacity):
@@ -93,75 +94,43 @@ def load_solomon_vrp(file_path) -> Union[VehicleInstance, List[CustomerInstance]
     
     return vehicle_info, customer_data
 
-def load_voratas_vrp(file_path, number_instance) -> Union[List[OrderItem], List[Location], List[Vehicle]]:
-    with open(file_path, 'r') as f:
-        lines = f.readlines()
-
+def load_voratas_vrp(instance) -> Union[List[OrderItem], List[Location], List[Vehicle]]:
+    file_path = f'benchmark/voratas/{instance}/'
+    demand_file = file_path + 'demands.txt'
+    vehicles = file_path + 'vehicles.txt'
+    # 0: id, 1: x, 2: y, 3: ready_time, 4: due_time, 5: service_time, 6: variable service time, 7: allow early, 8: allow late
+    demand_df = pd.read_csv(demand_file, sep='\t', header=None)
+    vehicles_df = pd.read_csv(vehicles, sep='\t', header=None)
+    locations_df = demand_df.iloc[:, 0:9]
+    demand_df = demand_df.iloc[:, 9:]
+    num_locations = len(demand_df)
     locations: List[Location] = []
     orders: List[OrderItem] = []
     vehicles: List[Vehicle] = []
-    order_matrix = np.zeros((number_instance + 1, number_instance + 1))
 
-    line_no = 0
-    for line in lines:
-        line_no += 1
-        line = line.strip()
-        if not line:
-            continue
-        # Load location and order matrix
-        if line_no >= 12 and line_no <= 32:
-            parts = line.split()
-            if len(parts) == 30:
-                location = Location(
-                    id=int(parts[0]),
-                    x=int(parts[1]),
-                    y=int(parts[2]),
-                    ready_time=int(parts[3]),
-                    due_time=int(parts[4]),
-                    service_time=int(parts[5])
-                )
-                locations.append(location)
-                for index, part in enumerate(parts[9:]):
-                    assert line_no >= 12 and line_no <= 32
-                    assert index >= 0 and index <= number_instance, f"Index: {index}"
-                    order_matrix[line_no-12][index] = int(part)
+    for i in range(num_locations):
+        location = Location(i, locations_df.iloc[i, 1], locations_df.iloc[i, 2], locations_df.iloc[i, 3], locations_df.iloc[i, 4], locations_df.iloc[i, 5])
+        locations.append(location)
 
-        # Load vehicle information
-        if line_no >= 43 and line_no <= 58:
-            parts = line.split()
-            if len(parts) == 7:
-                for loc in locations:
-                    if loc.id == int(parts[5]):
-                        start_location = loc
-                    if loc.id == int(parts[6]):
-                        end_location = loc
-                vehicle = Vehicle(
-                    _id=int(parts[0]),
-                    capacity=int(parts[1]),
-                    time_limit=int(parts[2]),
-                    fixed_cost=int(parts[3]),
-                    variable_cost=int(parts[4]),
-                    start=start_location,
-                    end=end_location
-                )
-                vehicles.append(vehicle)
     order_id = 0
-    for i in range(order_matrix.shape[0]):
-        for j in range(order_matrix.shape[1]):
-            if i != j and order_matrix[i][j] > 0:
-                start_location = locations[i]
-                end_location = locations[j]
-                order = OrderItem(
-                    order_id, 
-                    start_location, 
-                    end_location, 
-                    order_matrix[i][j], 
-                    start_location.ready_time, 
-                    start_location.due_time, 
-                    start_location.service_time,
-                )
+    for i in range(num_locations):
+        for j in range(num_locations):
+            if i == j:
+                continue
+            else:
+                demand = demand_df.iloc[i, j]
+                if demand == 0:
+                    continue
+                ready_time = demand_df.iloc[j, 3]
+                due_time = demand_df.iloc[j, 4]
+                service_time = demand_df.iloc[j, 5]
+                order = OrderItem(order_id, locations[i], locations[j], demand, ready_time, due_time, service_time)
                 orders.append(order)
                 order_id += 1
+
+    for i in range(len(vehicles_df)):
+        vehicle = Vehicle(i, vehicles_df.iloc[i, 1], vehicles_df.iloc[i, 2], vehicles_df.iloc[i, 3], vehicles_df.iloc[i, 4], vehicles_df.iloc[i, 5], vehicles_df.iloc[i, 6])
+        vehicles.append(vehicle)
 
     return orders, locations, vehicles
 
