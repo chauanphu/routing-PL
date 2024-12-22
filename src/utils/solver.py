@@ -20,7 +20,7 @@ class PSOSolver:
         self.particles: List[PSOParticle] = []
         self.locations: List[Location] = [] # [1, 2R]; R = number of orders
         self.particle_history = [] # Add this line to store particle histories
-        self.final_solution = None
+        self.final_solution = {}
 
     def reset_swarm(self):
         self.g_best = []
@@ -47,17 +47,6 @@ class PSOSolver:
             self.locations.append(order.start_location)
             self.locations.append(order.end_location)
         return
-    
-    def fitness(self):
-        """
-        Update the fitness of each particle and update the global
-        """
-        for particle in self.particles:
-            particle.decode()
-            particle.update_fitness()
-            if particle.p_fitness < self.g_fitness or self.g_fitness == 0:
-                self.g_best = particle.p_best
-                self.g_fitness = particle.p_fitness
 
     def solve(self):
         print("Initial Best Fitness:", self.g_fitness)
@@ -68,7 +57,6 @@ class PSOSolver:
         
         for i in range(self.n_iterations):
             print(f"Iteration: {i+1}/{self.n_iterations}", end='\t')
-            p_fitness = 0
 
             for idx, particle in enumerate(self.particles):
                 particle.update_velocity(self.g_best)
@@ -81,12 +69,11 @@ class PSOSolver:
                 if particle.p_fitness < self.g_fitness:
                     self.g_best = particle.p_best
                     self.g_fitness = particle.p_fitness
-                    self.final_solution = particle.order_sets
-                if particle.p_fitness < p_fitness or p_fitness == 0:
-                    p_fitness = particle.p_fitness
-
+                    self.final_solution = {
+                        "order_set": particle.order_sets,
+                        "routes": particle.p_solution
+                    }
             history['fitness'].append(self.g_fitness)
-            history['p_fitness'] = p_fitness
 
             print(f"Global Best Fitness: {self.g_fitness:.2f}")
 
@@ -100,30 +87,26 @@ class PSOSolver:
         return
     
     def print_best_solution(self):
-        best_particle = None
-        best_fitness = 0
-        for particle in self.particles:
-            if particle.p_fitness < best_fitness or best_fitness == 0:
-                best_particle = particle
-                best_fitness = particle.p_fitness
-        best_particle.decode()
-        best_particle.print_solution()
-        print("-"*10)
-        return
-    
-    def visualize_solution(self):
-        pass
-        # plt.figure(figsize=(10, 8))
-        # colors = plt.cm.get_cmap('tab20', len(self.vehicles))
-        # for idx, order_set in enumerate(self.p_best_order_sets):
-        #     if not order_set.orders:
-        #         continue
-        #     route = self.solutions[idx].route  # Assuming Route has a 'route' attribute with ordered locations
-        #     x = [loc.x for loc in route]
-        #     y = [loc.y for loc in route]
-        #     plt.plot(x, y, marker='o', color=colors(idx), label=f'Vehicle {idx+1}')
-        # plt.title('Routing Solution')
-        # plt.xlabel('X Coordinate')
-        # plt.ylabel('Y Coordinate')
-        # plt.legend()
-        # plt.show()
+        with open('output/pso.best_solution.txt', 'w') as f:
+            if not self.final_solution:
+                f.write("No solution found\n")
+                return
+            # Print configuration
+            f.write(f"Number of particles: {self.n_particles}\n")
+            f.write(f"Number of iterations: {self.n_iterations}\n")
+            f.write("-"*20 + "\n")
+            # Print the metadata
+            f.write(f"Best Fitness: {self.g_fitness}\n")
+            f.write(f"Number of vehicles used: {len(self.final_solution['routes'])}\n")
+            f.write(f"Number of orders: {sum([len(o.orders) for o in self.final_solution['order_set']])}\n")
+            f.write("Best Solution\n")
+            f.write("-"*20 + "\n")
+            for idx, (route, order_set) in enumerate(zip(self.final_solution['routes'], self.final_solution['order_set'])):
+                f.write(f"Route {idx+1}\n")
+                f.write("-"*10 + "\n")
+                for order in order_set.orders.values():
+                    f.write(f"{order}\n")
+                f.write("Route\n")
+                f.write(f"{route}\n")
+                f.write("-"*10 + "\n")
+                f.write("\n")

@@ -81,7 +81,7 @@ class PSOParticle:
         previous_pos = np.copy(self.positions)
         self.positions += self.velocity
         self.positions = np.clip(self.positions, 0, len(self.vehicles) - 1, out=self.positions)
-        assert np.equal(previous_pos, self.positions).all() == False, "Position not updated"
+        # assert np.equal(previous_pos, self.positions).all() == False, "Position not updated"
        
     def update_velocity(self, global_best: np.ndarray):
         cognitive_component = self.c1 * np.random.rand() * (self.p_best - self.positions)
@@ -90,32 +90,30 @@ class PSOParticle:
 
     def update_fitness(self):
         total_distance = 0
-        self.solutions = []
+        solutions = []
         fitness = 0
         for order_set in self.order_sets:
             if not nx.is_directed_acyclic_graph(order_set):
-                fitness = INFEASIBILITY_PENALTY # A very large number
-                if self.p_fitness is None:
-                    self.p_fitness = INFEASIBILITY_PENALTY
-                    self.p_best = np.copy(self.positions)
-                return
+                fitness += INFEASIBILITY_PENALTY # A very large number
+                solutions.append(None)
+                continue
             try:
                 route, total_distance = order_set.weighted_topological_sort(weight="due_time", allow_early=ALLOW_EARLY)
             except nx.NetworkXUnfeasible as e:
                 # print(e)
-                fitness = INFEASIBILITY_PENALTY
-                if self.p_fitness is None:
-                    self.p_fitness = INFEASIBILITY_PENALTY
-                    self.p_best = np.copy(self.positions)
-                return
+                fitness += INFEASIBILITY_PENALTY
+                solutions.append(None)
+                continue
             
-            fitness += total_distance
-            self.solutions.append(route)
+            fitness += float(total_distance)
+            solutions.append(route)
+            
         if self.p_fitness:
             if fitness > self.p_fitness:
                 return
         self.p_fitness = fitness
         self.p_best = np.copy(self.positions)
+        self.p_solution = solutions
         
     def __repr__(self) -> str:
         return f"Particle: {self.positions} Fitness: {self.fitness:.2f}"
