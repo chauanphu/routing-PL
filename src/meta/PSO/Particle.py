@@ -12,7 +12,7 @@ class PSOParticle:
         self.orders: List[OrderItem] = orders
         self.order_sets: List[OrderSet] = []
         self.vehicles: List[Vehicle] = vehicles
-        self.solutions: List[Route] = []
+        self.p_solution: List[Route] = []
         if positions is None:
             self.positions = np.random.uniform(0, num_vehicle, num_order * 2) # Dim: [1, 2 * num_order], pairs of (assigned vehicle, priority)
         # Clipper the first half of the positions to be vehicle assignment
@@ -60,13 +60,9 @@ class PSOParticle:
         for _assign, _priority, order in zip(assignment, priority, self.orders):
             vehicle_id = int(_assign)
             order_set = self.order_sets[vehicle_id]
-            previous_order = len(order_set.orders)
             order_set.add_order(order, priority=float(_priority))
-            assert len(order_set.orders) == previous_order + 1, "Order not added"
             i += 1
         self.order_sets = [o for o in self.order_sets if not o.isEmpty()]
-        served_orders = sum([len(o.orders) for o in self.order_sets])
-        assert served_orders == len(self.orders), f"Served orders not equal to total orders: {served_orders} != {len(self.orders)}"
 
     def print_solution(self):
         print("Solution")

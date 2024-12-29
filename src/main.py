@@ -6,7 +6,7 @@ from utils.config import POPULATION_SIZE, MAX_ITER, INFEASIBILITY_PENALTY
 logging.basicConfig(level=logging.INFO)
 
 def pso_main():
-    orders, locations, vehicles  = load_voratas_vrp('Aac1')
+    orders, locations, vehicles  = load_voratas_vrp('Aar1')
     print("Number of orders:", len(orders))
     print("Number of locations:", len(locations))
     print("Number of vehicles:", len(vehicles))

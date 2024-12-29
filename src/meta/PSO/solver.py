@@ -64,24 +64,25 @@ class PSOSolver:
             for idx, particle in enumerate(self.particles):
                 particle.update_velocity(self.g_best)
                 particle.update_position()
+                particle.decode()
+                particle.update_fitness()
             # Evolution of each individual
             ga = GA(i, self.particles, num_vehicle=len(self.vehicles)-1, num_orders=len(self.orders))
             self.particles = ga.evolve(self.orders, self.vehicles)
             # Evaluate the best fitness
             for idx, particle in enumerate(self.particles):
                 if particle.p_fitness < self.g_fitness:
-                    self.g_best = particle.p_best
-                    self.g_fitness = particle.p_fitness
-                # Store particle's personal best fitness
-                history['particle_fitness'][idx].append(particle.p_fitness)
-                
-                if particle.p_fitness < self.g_fitness:
+                    if None in particle.p_solution:
+                        print("Invalid solution")
                     self.g_best = particle.p_best
                     self.g_fitness = particle.p_fitness
                     self.final_solution = {
                         "order_set": particle.order_sets,
                         "routes": particle.p_solution
                     }
+                # Store particle's personal best fitness
+                history['particle_fitness'][idx].append(particle.p_fitness)
+
             history['fitness'].append(self.g_fitness)
             print(f"Global Best Fitness: {self.g_fitness:.2f}")
 

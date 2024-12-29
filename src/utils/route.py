@@ -82,8 +82,6 @@ class OrderSet(nx.DiGraph):
             self.nodes[start_id]['load'] += order.demand
             self.nodes[start_id]['num_pickup'] += 1
             self.nodes[start_id]['weight'] += priority
-            # due_time = self.nodes[start_id]['due_time']
-            # self.nodes[start_id]['due_time'] = min(due_time, order.due_time)
         else:
             self.add_node(
                 start_id, 
@@ -165,11 +163,12 @@ class OrderSet(nx.DiGraph):
             current_load += self.nodes[next_node]['load']
             
             if current_node is not None:
-                total_distance += self._get_distance(current_node, next_node)
+                distance = self._get_distance(current_node, next_node)
+                total_distance += distance
                 # Update the current weight
                 current_load -= _get_unload(route, next_node)
                 # Time progress: distance + service time of the current node
-                current_time += total_distance + next_location.service_time
+                current_time += distance
                 if not allow_early:
                     current_time = max(current_time, next_location.ready_time)
             route.add_location(next_location)

@@ -36,8 +36,10 @@ class GA:
                 new_individual = PSOParticle(orders, vehicles, child1)
                 new_individual.decode()
                 new_individual.update_fitness()
-                if new_individual.p_fitness < sorted_fitness[-1]:
-                    chromosomes[idxes[-1]] = new_individual.positions
+                for idx, fitness in zip(idxes, sorted_fitness):
+                    if new_individual.p_fitness < fitness:
+                        chromosomes[idxes[-1]] = new_individual.positions
+                        break
                 current_best = sorted_elites[0]
                 current_best_fitness = sorted_fitness[0]
             
@@ -113,7 +115,6 @@ class GA:
         child2 = np.concatenate([new_assignment, new_priority])
         return child1, child2
     
-
     def mutate(self, chromosome: np.ndarray, mutation_rate=0.1) -> np.ndarray:
         """
         Mutate the chromosome, swapping vehicle assignment and priority
