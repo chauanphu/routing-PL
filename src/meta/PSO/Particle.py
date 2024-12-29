@@ -78,7 +78,6 @@ class PSOParticle:
             print("-"*10)
 
     def update_position(self):
-        previous_pos = np.copy(self.positions)
         self.positions += self.velocity
         self.positions = np.clip(self.positions, 0, len(self.vehicles) - 1, out=self.positions)
         # assert np.equal(previous_pos, self.positions).all() == False, "Position not updated"

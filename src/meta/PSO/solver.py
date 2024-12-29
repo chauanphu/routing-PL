@@ -2,7 +2,7 @@
 
 import random
 from typing import List
-from utils.Particle import PSOParticle
+from meta.PSO.Particle import PSOParticle
 from utils.load_data import Location, OrderItem, Vehicle
 # from utils.route import SASolution
 import numpy as np

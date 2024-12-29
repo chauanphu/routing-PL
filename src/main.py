@@ -1,12 +1,12 @@
 from utils.load_data import load_voratas_vrp
 import logging
 from matplotlib import pyplot as plt
-from utils.solver import PSOSolver
+from meta.PSO.solver import PSOSolver
 from utils.config import POPULATION_SIZE, MAX_ITER, INFEASIBILITY_PENALTY
 logging.basicConfig(level=logging.INFO)
 
 def pso_main():
-    orders, locations, vehicles  = load_voratas_vrp('Aac2')
+    orders, locations, vehicles  = load_voratas_vrp('Aac1')
     print("Number of orders:", len(orders))
     print("Number of locations:", len(locations))
     print("Number of vehicles:", len(vehicles))
