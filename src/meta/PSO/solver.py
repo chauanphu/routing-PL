@@ -2,6 +2,7 @@
 
 import random
 from typing import List
+from meta.genetics.GA import GA
 from meta.PSO.Particle import PSOParticle
 from utils.load_data import Location, OrderItem, Vehicle
 # from utils.route import SASolution
@@ -12,7 +13,7 @@ random.seed(42)
 
 
 class PSOSolver:
-    def __init__(self, n_particles=1000, n_iterations=50):
+    def __init__(self, n_particles=1000, n_iterations=50, orders: List[OrderItem] = None, vehicles: List[Vehicle] = None):
         self.n_particles = n_particles
         self.n_iterations = n_iterations
         self.g_best = [] # Best position
@@ -21,6 +22,8 @@ class PSOSolver:
         self.locations: List[Location] = [] # [1, 2R]; R = number of orders
         self.particle_history = [] # Add this line to store particle histories
         self.final_solution = {}
+        self.orders = orders
+        self.vehicles = vehicles
 
     def reset_swarm(self):
         self.g_best = []
@@ -30,12 +33,12 @@ class PSOSolver:
         self.particle_history = [] # Add this line
         return
     
-    def init_swarm(self, orders: List[OrderItem], vehicles: List[Vehicle]):
+    def init_swarm(self):
         self.reset_swarm()
         p_best = []
         p_fitness = 0
         for _ in range(self.n_particles):
-            particle = PSOParticle(orders, vehicles)
+            particle = PSOParticle(self.orders, self.vehicles)
             particle.setup()
             self.particles.append(particle)
             if particle.p_fitness < p_fitness or p_fitness == 0:
@@ -43,7 +46,7 @@ class PSOSolver:
                 p_fitness = particle.p_fitness
         self.g_best = p_best
         self.g_fitness = p_fitness
-        for order in orders:
+        for order in self.orders:
             self.locations.append(order.start_location)
             self.locations.append(order.end_location)
         return
@@ -61,8 +64,14 @@ class PSOSolver:
             for idx, particle in enumerate(self.particles):
                 particle.update_velocity(self.g_best)
                 particle.update_position()
-                particle.decode()
-                particle.update_fitness()
+            # Evolution of each individual
+            ga = GA(i, self.particles, num_vehicle=len(self.vehicles)-1, num_orders=len(self.orders))
+            self.particles = ga.evolve(self.orders, self.vehicles)
+            # Evaluate the best fitness
+            for idx, particle in enumerate(self.particles):
+                if particle.p_fitness < self.g_fitness:
+                    self.g_best = particle.p_best
+                    self.g_fitness = particle.p_fitness
                 # Store particle's personal best fitness
                 history['particle_fitness'][idx].append(particle.p_fitness)
                 
@@ -74,7 +83,6 @@ class PSOSolver:
                         "routes": particle.p_solution
                     }
             history['fitness'].append(self.g_fitness)
-
             print(f"Global Best Fitness: {self.g_fitness:.2f}")
 
         return history

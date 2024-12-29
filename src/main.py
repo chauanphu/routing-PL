@@ -11,8 +11,8 @@ def pso_main():
     print("Number of locations:", len(locations))
     print("Number of vehicles:", len(vehicles))
     # visualize_orders(orders, vehicles=vehicles, title="Aac2", output_name="Aac2")
-    psoSolver = PSOSolver(n_particles=POPULATION_SIZE, n_iterations=MAX_ITER)
-    psoSolver.init_swarm(orders=orders, vehicles=vehicles)
+    psoSolver = PSOSolver(n_particles=POPULATION_SIZE, n_iterations=MAX_ITER, orders=orders, vehicles=vehicles)
+    psoSolver.init_swarm()
     history = psoSolver.solve()
     # Plot the line of the best fitness and the personal best fitness
     plt.plot(history['fitness'], label='Global Best')   

@@ -6,16 +6,19 @@ import numpy as np
 from utils.config import COGNITIVE_WEIGHT, SOCIAL_WEIGHT, INFEASIBILITY_PENALTY, INERTIA, ALLOW_EARLY
 
 class PSOParticle:
-    def __init__(self, orders: List[OrderItem], vehicles: List[Vehicle]):
+    def __init__(self, orders: List[OrderItem], vehicles: List[Vehicle], positions: np.ndarray = None):
         num_order = len(orders)
         num_vehicle = len(vehicles) - 1
         self.orders: List[OrderItem] = orders
         self.order_sets: List[OrderSet] = []
         self.vehicles: List[Vehicle] = vehicles
         self.solutions: List[Route] = []
-
-        self.positions = np.random.uniform(0, num_vehicle, num_order * 2) # Dim: [1, 2 * num_order], pairs of (assigned vehicle, priority)
-        
+        if positions is None:
+            self.positions = np.random.uniform(0, num_vehicle, num_order * 2) # Dim: [1, 2 * num_order], pairs of (assigned vehicle, priority)
+        # Clipper the first half of the positions to be vehicle assignment
+            self.positions[:num_order] = np.clip(self.positions[:num_order], 0, num_vehicle - 1, out=self.positions[:num_order])
+        else:
+            self.positions = positions
         self.velocity = np.random.rand(num_order * 2) # Dim: [1, 2 * num_order]
         self.p_best = None
         self.p_fitness = None
@@ -23,6 +26,12 @@ class PSOParticle:
         self.inertia = INERTIA
         self.c1 = COGNITIVE_WEIGHT
         self.c2 = SOCIAL_WEIGHT
+    
+    @staticmethod
+    def random_position(num_order: int, num_vehicle: int) -> np.ndarray:
+        positions = np.random.uniform(0, num_vehicle, num_order * 2)
+        positions[:num_order] = np.clip(positions[:num_order], 0, num_vehicle - 1, out=positions[:num_order])
+        return positions
 
     def setup(self):
         """
