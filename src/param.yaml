@@ -2,8 +2,8 @@ constraints:
   allow_early: true
   infeasbiility_penalty: 1000
 PSO:
-  population_size: 100
-  max_iter: 500
+  population_size: 500
+  max_iter: 200
   inertia_weight: 0.72984
   cognitive_weight: 1.5
   social_weight: 1.5
@@ -12,8 +12,8 @@ GA:
   num_min: 1
   num_max: 20
   ps_min: 10
-  ps_max: 50
+  ps_max: 10
   min_iter: 10
-  max_iter: 100
+  max_iter: 20
   gamma: 10
   beta: 15
