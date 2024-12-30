@@ -1,19 +1,22 @@
+instance: "Aar1"
 constraints:
   allow_early: true
   infeasbiility_penalty: 2000
 PSO:
   population_size: 1000
-  max_iter: 100
+  max_iter: 200
   inertia_weight: 0.72984
   cognitive_weight: 1.5
   social_weight: 1.5
   max_velocity: 0.5
 GA:
   num_min: 3
-  num_max: 20
+  num_max: 25
   ps_min: 10
   ps_max: 100
   min_iter: 10
   max_iter: 20
   gamma: 10
   beta: 15
+  enabled: false
+  mode: "best_selection"

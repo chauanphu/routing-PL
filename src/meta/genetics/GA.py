@@ -2,7 +2,7 @@ import random
 from typing import List, Tuple
 import numpy as np
 from meta.PSO.Particle import PSOParticle
-from utils.config import GA_NUMMAX, GA_NUMMIN, MAX_ITER, GAMMA, GA_MINITER, BETA, GA_PSMIN, GA_PSMAX, GA_MAXITR
+from utils.config import GA_NUMMAX, GA_NUMMIN, MAX_ITER, GAMMA, GA_MINITER, BETA, GA_PSMIN, GA_PSMAX, GA_MAXITR, GA_MODE
 from operator import itemgetter
 
 from utils.load_data import OrderItem, Vehicle
@@ -20,7 +20,7 @@ class GA:
     def evolve(self, orders: List[OrderItem], vehicles: List[Vehicle]):
         sub_idxes = self.select_subpopulation()
         selected_population = [self.population[i] for i in sub_idxes]
-        for idx, individual in zip(sub_idxes, selected_population):
+        for ind_idx, individual in zip(sub_idxes, selected_population):
             chromosomes = self.initialize(individual=individual.positions)
             current_best = individual.positions
             current_best_fitness = individual.p_fitness
@@ -38,7 +38,7 @@ class GA:
                 new_individual.update_fitness()
                 for idx, fitness in zip(idxes, sorted_fitness):
                     if new_individual.p_fitness < fitness:
-                        chromosomes[idxes[-1]] = new_individual.positions
+                        chromosomes[idx] = new_individual.positions
                         break
                 current_best = sorted_elites[0]
                 current_best_fitness = sorted_fitness[0]
@@ -48,8 +48,8 @@ class GA:
                 new_particle = PSOParticle(orders, vehicles, current_best)
                 new_particle.decode()
                 new_particle.update_fitness()
-                print("Updated", idx, end=' ')
-                self.population[idx] = new_particle
+                # print("Updated", ind_idx, end=' ')
+                self.population[ind_idx] = new_particle
                 
         return self.population
     
@@ -69,7 +69,8 @@ class GA:
         # Return the best individuals
         return sorted(
             range(len(self.population)), 
-            key=lambda i: self.population[i].p_fitness
+            key=lambda i: self.population[i].p_fitness,
+            reverse=GA_MODE == 'best_selection'
         )[:self.GA_NUM]
 
     def select(self, chromosomes: np.ndarray, fitness: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

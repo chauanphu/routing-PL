@@ -7,7 +7,7 @@ from meta.PSO.Particle import PSOParticle
 from utils.load_data import Location, OrderItem, Vehicle
 # from utils.route import SASolution
 import numpy as np
-
+from utils.config import GA_ENABLED
 np.random.seed(42)
 random.seed(42)
 
@@ -67,8 +67,9 @@ class PSOSolver:
                 particle.decode()
                 particle.update_fitness()
             # Evolution of each individual
-            ga = GA(i, self.particles, num_vehicle=len(self.vehicles)-1, num_orders=len(self.orders))
-            self.particles = ga.evolve(self.orders, self.vehicles)
+            if GA_ENABLED:
+                ga = GA(i, self.particles, num_vehicle=len(self.vehicles)-1, num_orders=len(self.orders))
+                self.particles = ga.evolve(self.orders, self.vehicles)
             # Evaluate the best fitness
             for idx, particle in enumerate(self.particles):
                 if particle.p_fitness < self.g_fitness:
