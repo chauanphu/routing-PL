@@ -96,8 +96,8 @@ class PSOSolver:
             print("-"*10)
         return
     
-    def print_best_solution(self):
-        with open('output/pso.best_solution.txt', 'w') as f:
+    def print_best_solution(self, file_name='output/pso.best_solution.txt'):
+        with open(file_name, 'w') as f:
             if not self.final_solution:
                 f.write("No solution found\n")
                 return

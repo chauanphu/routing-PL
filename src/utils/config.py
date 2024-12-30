@@ -5,7 +5,7 @@ with open('param.yaml') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 # Problems
-INSTANCE: str = config['problem']
+INSTANCE: str = config['instance']
 
 # PSO hyperparameters
 POPULATION_SIZE = config['PSO']['population_size']

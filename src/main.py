@@ -2,11 +2,11 @@ from utils.load_data import load_voratas_vrp
 import logging
 from matplotlib import pyplot as plt
 from meta.PSO.solver import PSOSolver
-from utils.config import POPULATION_SIZE, MAX_ITER, INFEASIBILITY_PENALTY
+from utils.config import POPULATION_SIZE, MAX_ITER, INFEASIBILITY_PENALTY, INSTANCE, GA_ENABLED, GA_MODE
 logging.basicConfig(level=logging.INFO)
 
 def pso_main():
-    orders, locations, vehicles  = load_voratas_vrp('Aar1')
+    orders, locations, vehicles  = load_voratas_vrp(INSTANCE)
     print("Number of orders:", len(orders))
     print("Number of locations:", len(locations))
     print("Number of vehicles:", len(vehicles))
@@ -20,16 +20,18 @@ def pso_main():
     plt.axhline(y=INFEASIBILITY_PENALTY, color='r', linestyle='-', label='Infeasibility Penalty')
     plt.xlabel('Iterations')
     plt.ylabel('Fitness')
-    plt.title('Fitness of the best particle')
+    title = f'Fitness of {INSTANCE} using PSO{("-GA " + "MODE A" if GA_MODE == "best_selection" else "MODE B") if GA_ENABLED else ""}'
+    file_name = f'{INSTANCE}{("-GA" + "-A" if GA_MODE == "best_selection" else "-B") if GA_ENABLED else ""}'
+    plt.title(title)
     plt.legend()
     plt.show()
-    plt.savefig('output/pso_fitness.png')
+    plt.savefig(f'output/{file_name}.plot.png')
 
-    # Logging the change of the first particle fitness into a file.txt
-    with open('output/pso_particle_history.txt', 'w') as f:
-        for i in range(len(history['particle_fitness'][1])):
-            f.write(f"{i+1}: {history['particle_fitness'][1][i]}\n")
-    psoSolver.print_best_solution()
+    # Save the history to a file
+    with open(f'output/{file_name}.history.txt', 'w') as f:
+        f.write(str(history))
+    # Print the best solution
+    psoSolver.print_best_solution(f'output/{file_name}.solution.txt')
     print("Done")
 
 if __name__ == "__main__":
