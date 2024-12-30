@@ -48,7 +48,7 @@ class GA:
                 new_particle = PSOParticle(orders, vehicles, current_best)
                 new_particle.decode()
                 new_particle.update_fitness()
-                # print("Updated", ind_idx, end=' ')
+                print("Updated", ind_idx, end=' ')
                 self.population[ind_idx] = new_particle
                 
         return self.population

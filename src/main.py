@@ -29,7 +29,7 @@ def pso_main():
 
     # Save the history to a file
     with open(f'output/{file_name}.history.txt', 'w') as f:
-        f.write(str(history))
+        f.write(str(history['fitness']).replace("[", "").replace("]", ""))
     # Print the best solution
     psoSolver.print_best_solution(f'output/{file_name}.solution.txt')
     print("Done")

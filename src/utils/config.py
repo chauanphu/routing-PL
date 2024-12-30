@@ -26,6 +26,7 @@ GA_MINITER = config['GA']['min_iter']
 GA_MAXITR = config['GA']['max_iter']
 GA_ENABLED = config['GA']['enabled']
 GA_MODE: str = config['GA']['mode']
+GA_EVERY = config['GA']['every']
 assert GA_MODE in ['best_selection', 'worst_selection'], "GA mode must be either 'best_selection' or 'worst_selection'"
 
 # Constraints

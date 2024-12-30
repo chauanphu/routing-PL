@@ -7,7 +7,7 @@ from meta.PSO.Particle import PSOParticle
 from utils.load_data import Location, OrderItem, Vehicle
 # from utils.route import SASolution
 import numpy as np
-from utils.config import GA_ENABLED
+from utils.config import GA_ENABLED, GA_EVERY
 np.random.seed(42)
 random.seed(42)
 
@@ -67,7 +67,7 @@ class PSOSolver:
                 particle.decode()
                 particle.update_fitness()
             # Evolution of each individual
-            if GA_ENABLED:
+            if GA_ENABLED and i % GA_EVERY == 0:
                 ga = GA(i, self.particles, num_vehicle=len(self.vehicles)-1, num_orders=len(self.orders))
                 self.particles = ga.evolve(self.orders, self.vehicles)
             # Evaluate the best fitness

@@ -1,15 +1,18 @@
-instance: "Aar2"
+instance: "Aac1"
 constraints:
   allow_early: false
   infeasbiility_penalty: 3000
 PSO:
   population_size: 1000
-  max_iter: 150
+  max_iter: 100
   inertia_weight: 0.72984
   cognitive_weight: 1.5
   social_weight: 1.5
   max_velocity: 0.5
 GA:
+  every: 10
+  enabled: true
+  mode: "best_selection"
   num_min: 3
   num_max: 25
   ps_min: 10
@@ -18,5 +21,3 @@ GA:
   max_iter: 20
   gamma: 10
   beta: 15
-  enabled: true
-  mode: "best_selection"
