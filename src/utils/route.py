@@ -89,6 +89,7 @@ class OrderSet(nx.DiGraph):
                 num_pickup=1, 
                 loc=start_loc,
                 weight=priority,
+                service_time=start_loc.service_time
             )
 
         if not end_id in self.nodes:
@@ -98,6 +99,7 @@ class OrderSet(nx.DiGraph):
                 num_pickup=0, 
                 loc=end_loc,
                 weight=0,
+                service_time=end_loc.service_time
             )
         
         if not self.has_edge(start_id, end_id):
@@ -168,7 +170,7 @@ class OrderSet(nx.DiGraph):
                 # Update the current weight
                 current_load -= _get_unload(route, next_node)
                 # Time progress: distance + service time of the current node
-                current_time += distance
+                current_time += distance + self.nodes[current_node]['service_time']
                 if not allow_early:
                     current_time = max(current_time, next_location.ready_time)
             route.add_location(next_location)

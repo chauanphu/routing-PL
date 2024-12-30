@@ -73,8 +73,6 @@ class PSOSolver:
             # Evaluate the best fitness
             for idx, particle in enumerate(self.particles):
                 if particle.p_fitness < self.g_fitness:
-                    if None in particle.p_solution:
-                        print("Invalid solution")
                     self.g_best = particle.p_best
                     self.g_fitness = particle.p_fitness
                     self.final_solution = {

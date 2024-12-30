@@ -1,7 +1,7 @@
-instance: "Aac1"
+instance: "Aar2"
 constraints:
   allow_early: false
-  infeasbiility_penalty: 2000
+  infeasbiility_penalty: 3000
 PSO:
   population_size: 1000
   max_iter: 150
@@ -19,4 +19,4 @@ GA:
   gamma: 10
   beta: 15
   enabled: true
-  mode: "worst_selection"
+  mode: "best_selection"

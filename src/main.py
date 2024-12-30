@@ -20,8 +20,8 @@ def pso_main():
     plt.axhline(y=INFEASIBILITY_PENALTY, color='r', linestyle='-', label='Infeasibility Penalty')
     plt.xlabel('Iterations')
     plt.ylabel('Fitness')
-    title = f'Fitness of {INSTANCE} using PSO{("-GA " + "MODE A" if GA_MODE == "best_selection" else "MODE B") if GA_ENABLED else ""}'
-    file_name = f'{INSTANCE}{("-GA" + "-A" if GA_MODE == "best_selection" else "-B") if GA_ENABLED else ""}'
+    title = f'Fitness of {INSTANCE} using PSO{("-GA " + ("MODE A" if GA_MODE == "best_selection" else "MODE B")) if GA_ENABLED else ""}'
+    file_name = f'{INSTANCE}{("-GA" + ("-A" if GA_MODE == "best_selection" else "-B")) if GA_ENABLED else ""}'
     plt.title(title)
     plt.legend()
     plt.show()
