@@ -4,6 +4,10 @@ from matplotlib import pyplot as plt
 from meta.PSO.solver import PSOSolver
 from utils.config import POPULATION_SIZE, MAX_ITER, INFEASIBILITY_PENALTY, INSTANCE, GA_ENABLED, GA_MODE
 logging.basicConfig(level=logging.INFO)
+import numpy as np
+
+seed = 42
+np.random.seed(seed)
 
 def pso_main():
     orders, locations, vehicles  = load_voratas_vrp(INSTANCE)

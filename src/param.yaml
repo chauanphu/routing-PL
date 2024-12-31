@@ -1,4 +1,4 @@
-instance: "Aac2"
+instance: "Bac1"
 constraints:
   allow_early: false
   infeasbiility_penalty: 3000
@@ -10,14 +10,14 @@ PSO:
   social_weight: 1.5
   max_velocity: 0.5
 GA:
-  every: 10
+  every: 5
   enabled: true
-  mode: "best_selection"
+  mode: "worst_selection"
   num_min: 3
   num_max: 25
   ps_min: 10
   ps_max: 100
   min_iter: 10
-  max_iter: 50
+  max_iter: 100
   gamma: 10
   beta: 15
