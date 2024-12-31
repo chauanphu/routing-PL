@@ -3,7 +3,6 @@ from typing import List, Tuple
 import numpy as np
 from meta.PSO.Particle import PSOParticle
 from utils.config import GA_NUMMAX, GA_NUMMIN, MAX_ITER, GAMMA, GA_MINITER, BETA, GA_PSMIN, GA_PSMAX, GA_MAXITR, GA_MODE
-from operator import itemgetter
 
 from utils.load_data import OrderItem, Vehicle
 
@@ -50,7 +49,9 @@ class GA:
                 new_particle.update_fitness()
                 print("Updated", ind_idx, end=' ')
                 self.population[ind_idx] = new_particle
-                
+            elif current_best_fitness == individual.p_fitness:
+                print("Not changed", ind_idx, end=' ')
+
         return self.population
     
     def initialize(self, individual: np.ndarray) -> np.ndarray:
