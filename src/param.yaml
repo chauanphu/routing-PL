@@ -12,7 +12,7 @@ PSO:
 GA:
   every: 10
   enabled: true
-  mode: "best_selection"
+  mode: "worst_selection"
   num_min: 3
   num_max: 25
   ps_min: 10

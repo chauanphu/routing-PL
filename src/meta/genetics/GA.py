@@ -58,7 +58,7 @@ class GA:
         Randomly initialize vector with GA_PS particle
         """
         chromosomes = [PSOParticle.random_position(self.num_orders, self.num_vehicle) for _ in range(self.GA_PS)]
-        chromosomes[0] = individual
+        chromosomes[0] = individual.copy()
         return chromosomes
 
     def select_subpopulation(self) -> list[int]:
@@ -70,7 +70,7 @@ class GA:
         return sorted(
             range(len(self.population)), 
             key=lambda i: self.population[i].p_fitness,
-            reverse=GA_MODE == 'best_selection'
+            reverse=GA_MODE == 'worst_selection' # If the reverse is True, sort in descending order (worst selection)
         )[:self.GA_NUM]
 
     def select(self, chromosomes: np.ndarray, fitness: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
