@@ -14,43 +14,43 @@ class GA:
         self.GA_MAXITER = int(GA_MINITER + ((PSO_ITER / MAX_ITER) ** BETA) * (GA_MAXITR - GA_MINITER)) # Number of iterations of GA
         self.num_vehicle = num_vehicle
         self.num_orders = num_orders
-        self.ELITIST_SIZE = 4
+        self.ELITIST_SIZE = 10
 
     def evolve(self, orders: List[OrderItem], vehicles: List[Vehicle]):
         sub_idxes = self.select_subpopulation()
         selected_population = [self.population[i] for i in sub_idxes]
         for ind_idx, individual in zip(sub_idxes, selected_population):
-            chromosomes = self.initialize(individual=individual.positions)
-            current_best = individual.positions
             current_best_fitness = individual.p_fitness
+            current_best_position = individual.positions
+            new_best_particle = None
             for _ in range(self.GA_MAXITER):
                 # Keep the best individual
+                chromosomes = self.initialize(individual=current_best_position)
                 sorted_elites, sorted_fitness, idxes = self.select_elites(chromosomes, orders, vehicles)
                 elites = sorted_elites[:self.ELITIST_SIZE]
                 # Apply selection, crossover, and mutation
                 parent1, parent2 = self.select(elites, sorted_fitness[:self.ELITIST_SIZE])
-                child1, _ = self.crossover(parent1, parent2)
+                child1, child2 = self.crossover(parent1, parent2)
                 child1 = self.mutate(child1)
                 # Replace the worst individual with the new individual if the new individual is better
-                new_individual = PSOParticle(orders, vehicles, child1)
-                new_individual.decode()
-                new_individual.update_fitness()
-                for idx, fitness in zip(idxes, sorted_fitness):
-                    if new_individual.p_fitness < fitness:
-                        chromosomes[idx] = new_individual.positions
-                        break
-                current_best = sorted_elites[0]
-                current_best_fitness = sorted_fitness[0]
+                new_child1 = PSOParticle(orders, vehicles, child1)
+                new_child1.decode()
+                new_child1.update_fitness()
+                new_child2 = PSOParticle(orders, vehicles, child2)
+                new_child2.decode()
+                new_child2.update_fitness()
+
+                if new_child1.p_fitness < new_child2.p_fitness:
+                    new_child1 = new_child2
+                if new_child1.p_fitness < current_best_fitness:
+                    current_best_fitness = new_child1.p_fitness
+                    current_best_position = new_child1.positions
+                    new_best_particle = new_child1
             
             # Compare the new individual with the old individual
-            if current_best_fitness < individual.p_fitness:
-                new_particle = PSOParticle(orders, vehicles, current_best)
-                new_particle.decode()
-                new_particle.update_fitness()
+            if new_best_particle is not None:
                 print("Updated", ind_idx, end=' ')
-                self.population[ind_idx] = new_particle
-            elif current_best_fitness == individual.p_fitness:
-                print("Not changed", ind_idx, end=' ')
+                self.population[ind_idx] = new_best_particle
 
         return self.population
     
@@ -82,27 +82,31 @@ class GA:
         # Normalize the fitness
         fitness = np.array(fitness)
         fitness = fitness - np.min(fitness)
+        chromosomes = np.array(chromosomes)
         if np.sum(fitness) == 0:
             return chromosomes[0], chromosomes[1]
         fitness = fitness / np.sum(fitness)
         # Cumulative sum of the fitness
         cumsum = np.cumsum(fitness)
-        selected = []
-        for _ in range(2):
+        selected = set()
+        while len(selected) < 2:
             r = random.random()
             for i, f in enumerate(cumsum):
                 if r < f:
-                    selected.append(i)
+                    selected.add(i)
                     break
+        selected = list(selected)
         return chromosomes[selected[0]], chromosomes[selected[1]]
 
-    def crossover(self, parent1, parent2, crossover_rate=0.8) -> Tuple[np.ndarray, np.ndarray]:
+    def crossover(self, parent1: np.ndarray, parent2: np.ndarray, crossover_rate=0.8) -> Tuple[np.ndarray, np.ndarray]:
         """
         2-point crossover two parents, each parent is a vector of length 2 * num_orders
         
         The first half is segment is vehicle assignment, the second half is the priority
         """
         # Select two random points
+        parent1 = parent1.copy()
+        parent2 = parent2.copy()
         if random.random() > crossover_rate:
             return parent1, parent2
         half_point = len(parent1) // 2
@@ -124,6 +128,7 @@ class GA:
         """
         if random.random() > mutation_rate:
             return chromosome
+        chromosome = chromosome.copy()
         half_point = len(chromosome) // 2 - 1
         first_segment = chromosome[:half_point]
         second_segment = chromosome[half_point:]
