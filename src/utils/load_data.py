@@ -1,201 +1,125 @@
-# ...existing code...
+from pydantic import BaseModel
+from typing import List, Optional
 
-from dataclasses import dataclass
-from typing import List, Union
-import numpy as np
-import networkx as nx
-import matplotlib.pyplot as plt
-
-class VehicleInstance:
-    def __init__(self, number, capacity):
-        self.number = number
-        self.capacity = capacity
-
-@dataclass
-class Vehicle:
-    _id: int
-    capacity: int
-    time_limit: int
-    fixed_cost: int
-    variable_cost: int
-    start: int
-    end: int
-
-class CustomerInstance:
-    def __init__(self, cust_no, xcoord, ycoord, demand, ready_time, due_date, service_time):
-        self.cust_no = cust_no
-        self.xcoord = xcoord
-        self.ycoord = ycoord
-        self.demand = demand
-        self.ready_time = ready_time
-        self.due_date = due_date
-        self.service_time = service_time
+class DataPoint(BaseModel):
+    x: float
+    y: float
+    earliest: int
+    latest: int
+    service_time: int
     
-    def __repr__(self) -> str:
-        print(f"Customer: {self.cust_no}, {self.xcoord}, {self.ycoord}, {self.demand}, {self.ready_time}, {self.due_date}, {self.service_time}")
+class CustomerDataPoint(DataPoint):
+    customer_type: int
+    assigned_lockers: Optional[List[int]] = None
 
-@dataclass
-class Location:
-    id: int
-    x: int
-    y: int
-    ready_time: int = 0
-    due_time: int = 0
-    service_time: int = 0
+class LockerDataPoint(DataPoint):
+    pass
 
-class OrderItem:
-    def __init__(self, order_id, start_location: Location, end_location: Location, demand: int, ready_time: int, due_date: int, service_time: int):
-        self.order_id = order_id
-        self.start_location = start_location
-        self.end_location = end_location
-        self.demand = demand
-        self.ready_time = ready_time
-        self.due_time = due_date
-        self.service_time = service_time
-        self.distance = self.get_distance()
+class DepotDataPoint(DataPoint):
+    pass
 
-    def get_distance(self):
-        return ((self.start_location.x - self.end_location.x) ** 2 + (self.start_location.y - self.end_location.y) ** 2) ** 0.5
+class VRPDataLoader:
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.num_customers = 0
+        self.num_lockers = 0
+        self.num_vehicles = 0
+        self.capacity = 0
+        self.demands: List[int] = []
+        self.customer_data: List[CustomerDataPoint] = []
+        self.locker_assignments: List[List[int]] = []
+        self.customer_types: List[int] = []
+        self.depot_data: List[DepotDataPoint] = []
+        self.locker_data: List[LockerDataPoint] = []
+        self.distance_matrix = None
 
-    def __repr__(self):
-        return f"Order: {self.start_location.id} -> {self.end_location.id}: demand={self.demand}, distance={self.distance:.2f}"
+    def load_data(self):
+        with open(self.file_path, 'r') as file:
+            lines = file.readlines()
+            # Extract number of customers and lockers
+            self.num_customers, self.num_lockers = map(int, lines[0].split())
+            
+            # Extract number of vehicles and vehicle capacity
+            self.num_vehicles, self.capacity = map(int, lines[1].split())
+            
+            # Extract demands
+            self.demands = [int(lines[i].strip()) for i in range(2, 2 + self.num_customers)]
+            
+            # Extract depot data point, customer data points, locker data points and locker assignments
+            # Depot data point is the first data point
+            # Customer data points are the next num_customers data points
+            # Locker data points are the next num_lockers data points
+            # Locker assignments are the next num_customers data points
 
-def load_solomon_vrp(file_path) -> Union[VehicleInstance, List[CustomerInstance]]:
-    with open(file_path, 'r') as f:
-        lines = f.readlines()
-    
-    vehicle_info: VehicleInstance = None
-    customer_data: List[CustomerInstance] = []
-    section = None    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        if line.startswith('VEHICLE'):
-            section = 'vehicle'
-            continue
-        elif line.startswith('CUSTOMER'):
-            section = 'customer'
-            continue
-        if section == 'vehicle':
-            if 'NUMBER' in line and 'CAPACITY' in line:
-                continue
-            parts = line.split()
-            if len(parts) >= 2:
-                vehicle_info = VehicleInstance(int(parts[0]), int(parts[1]))
-        elif section == 'customer':
-            if line.startswith('CUST NO.'):
-                continue
-            parts = line.split()
-            if len(parts) == 7:
-                customer = CustomerInstance(int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4]), int(parts[5]), int(parts[6]))
-                customer_data.append(customer)
-    
-    return vehicle_info, customer_data
+            # Extract depot data point
+            current_index = 2 + self.num_customers
+            # While the line has 5 elements, it is a data point
+            while len(lines[current_index].split()) == 6:
+                x, y, earliest, latest, service_time, type = map(int, lines[current_index].split())
+                if type == 0:
+                    self.depot_data.append(DepotDataPoint(x=x, y=y, earliest=earliest, latest=latest, service_time=service_time))
+                elif type == 4:
+                    self.locker_data.append(LockerDataPoint(x=x, y=y, earliest=earliest, latest=latest, service_time=service_time))
+                else:
+                    self.customer_data.append(CustomerDataPoint(x=x, y=y, earliest=earliest, latest=latest, service_time=service_time, customer_type=type))
+                current_index += 1
+            # Extract locker assignments
+            for index, i in enumerate(range(current_index, current_index + self.num_customers)):
+                assigned_lockers = list(map(int, lines[i].split()))
+                self.customer_data[index].assigned_lockers = assigned_lockers
+                self.locker_assignments.append(list(map(int, lines[i].split())))
 
-def load_voratas_vrp(file_path, number_instance) -> Union[List[OrderItem], List[Location], List[Vehicle]]:
-    with open(file_path, 'r') as f:
-        lines = f.readlines()
+    def get_distance_matrix(self):
+        if self.distance_matrix is not None:
+            return self.distance_matrix
+        distances = []
+        for i in range(len(self.customer_data)):
+            row = []
+            for j in range(len(self.customer_data)):
+                row.append(((self.customer_data[i].x - self.customer_data[j].x) ** 2 + (self.customer_data[i].y - self.customer_data[j].y) ** 2) ** 0.5)
+            distances.append(row)
+        self.distance_matrix = distances
+        return distances
 
-    locations: List[Location] = []
-    orders: List[OrderItem] = []
-    vehicles: List[Vehicle] = []
-    order_matrix = np.zeros((number_instance + 1, number_instance + 1))
+    def get_demands(self):
+        return self.demands
 
-    line_no = 0
-    for line in lines:
-        line_no += 1
-        line = line.strip()
-        if not line:
-            continue
-        # Load location and order matrix
-        if line_no >= 12 and line_no <= 32:
-            parts = line.split()
-            if len(parts) == 30:
-                location = Location(
-                    id=int(parts[0]),
-                    x=int(parts[1]),
-                    y=int(parts[2]),
-                    ready_time=int(parts[3]),
-                    due_time=int(parts[4]),
-                    service_time=int(parts[5])
-                )
-                locations.append(location)
-                for index, part in enumerate(parts[9:]):
-                    assert line_no >= 12 and line_no <= 32
-                    assert index >= 0 and index <= number_instance, f"Index: {index}"
-                    order_matrix[line_no-12][index] = int(part)
+    def get_customer_data(self):
+        return self.customer_data
 
-        # Load vehicle information
-        if line_no >= 43 and line_no <= 58:
-            parts = line.split()
-            if len(parts) == 7:
-                for loc in locations:
-                    if loc.id == int(parts[5]):
-                        start_location = loc
-                    if loc.id == int(parts[6]):
-                        end_location = loc
-                vehicle = Vehicle(
-                    _id=int(parts[0]),
-                    capacity=int(parts[1]),
-                    time_limit=int(parts[2]),
-                    fixed_cost=int(parts[3]),
-                    variable_cost=int(parts[4]),
-                    start=start_location,
-                    end=end_location
-                )
-                vehicles.append(vehicle)
-    order_id = 0
-    for i in range(order_matrix.shape[0]):
-        for j in range(order_matrix.shape[1]):
-            if i != j and order_matrix[i][j] > 0:
-                start_location = locations[i]
-                end_location = locations[j]
-                order = OrderItem(
-                    order_id, 
-                    start_location, 
-                    end_location, 
-                    order_matrix[i][j], 
-                    start_location.ready_time, 
-                    start_location.due_time, 
-                    start_location.service_time,
-                )
-                orders.append(order)
-                order_id += 1
+    def get_capacity(self):
+        return self.capacity
 
-    return orders, locations, vehicles
+    def get_num_customers(self):
+        return self.num_customers
 
-def convert_to_orders(customer_data: List[CustomerInstance]) -> List[OrderItem]:
-    """
-    Convert the customer data to a list of orders, with depot
-    """
-    orders = []
-    start_location = Location(0, customer_data[0].xcoord, customer_data[0].ycoord)
-    for customer in customer_data[1:]:
-        end_location = Location(customer.cust_no, customer.xcoord, customer.ycoord)
-        order = OrderItem(customer.cust_no, start_location, end_location, customer.demand, customer.ready_time, customer.due_date, customer.service_time)
-        orders.append(order)
-    return orders
+    def get_num_lockers(self):
+        return self.num_lockers
 
-def visualize_orders(orders: List[OrderItem], vehicles: List[Vehicle], title: str, output_name: str = ''):
-    G = nx.DiGraph()
-    vehicle_station: List[int] = [vehicle.start for vehicle in vehicles]
-    vehicle_station = set(vehicle_station)
+    def get_num_vehicles(self):
+        return self.num_vehicles
 
-    for order in orders:
-        G.add_node(order.start_location.id, pos=(order.start_location.x, order.start_location.y))
-        G.add_node(order.end_location.id, pos=(order.end_location.x, order.end_location.y))
-        G.add_edge(order.start_location.id, order.end_location.id, weight=order.distance)
-    
-    pos = nx.get_node_attributes(G, 'pos')
-    plt.figure(figsize=(10, 10))
-    plt.title(title)
-    nx.draw(G, pos, with_labels=True, node_size=500, node_color='skyblue', font_size=10, font_weight='bold')
-    nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=7)
+    def get_customer_types(self):
+        return self.customer_types
 
-    # Highlight vehicle stations in red
-    nx.draw_networkx_nodes(G, pos, nodelist=vehicle_station, node_color='red', node_size=500)
+    def get_locker_assignments(self):
+        return self.locker_assignments
 
-    plt.savefig(f'output/{output_name}.png')
-    print("Orders visualized in output/{output_name}.png")
-    # plt.show()
+    def get_depot_data(self):
+        return self.depot_data
+
+    def get_locker_data(self):
+        return self.locker_data
+
+# Example usage:
+# loader = VRPDataLoader('/mnt/data/C101_co_25.txt')
+# loader.load_data()
+# print("Number of Customers:", loader.get_num_customers())
+# print("Number of Lockers:", loader.get_num_lockers())
+# print("Number of Vehicles:", loader.get_num_vehicles())
+# print("Vehicle Capacity:", loader.get_capacity())
+# print("Demands:", loader.get_demands())
+# print("Customer Data:", loader.get_customer_data())
+# print("Depot Data:", loader.get_depot_data())
+# print("Locker Data:", loader.get_locker_data())
+# print("Locker Assignments:", loader.get_locker_assignments())

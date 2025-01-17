@@ -5,3 +5,7 @@ PSO:
   social_weight: 1.5
   max_velocity: 0.5
   infeasbiility_penalty: 1000
+DATASET:
+  INSTANCE: 'C101_co_25'
+  DATA_PATH: 'benchmark/vrppl/25/C101_co_25.txt'
+  
