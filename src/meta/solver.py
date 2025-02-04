@@ -1,4 +1,4 @@
-from typing import List
+import math
 from pydantic import BaseModel
 
 class Node(BaseModel):
@@ -56,7 +56,6 @@ class Problem:
     customers: list[Customer]
     depot: Node
     lockers: list[Node]
-    vehicles: list[Vehicle]
     num_vehicles: int
     num_lockers: int
     num_customers: int
@@ -107,6 +106,116 @@ class Problem:
                         self.customers[i].assigned_locker = j + 1
                         break
 
+    @staticmethod
+    def euclidean_distance(n1: Node, n2: Node) -> float:
+        """Helper function to calculate Euclidean distance between two nodes."""
+        return math.hypot(n1.x - n2.x, n1.y - n2.y)
+
+    def get_search_space(self) -> list[tuple[float, float]]:
+        """
+        Get the search space for the problem.
+
+        Returns:
+            search_space (list[tuple[float, float]]): The search space for the problem.
+        """
+        return [(0.0, 1.0) for _ in range(self.num_customers)]
+
+    def evaluate(self, positions: list[float]) -> float:
+        """
+        Decode the positions (continuous values) to a permutation of customer visits,
+        split the permutation into routes for vehicles while checking feasibility,
+        and compute the total travel distance.
+        
+        Parameters:
+            positions (list[float]): a list of continuous values associated with each customer.
+            
+        Returns:
+            total_distance (float): total distance traveled by all vehicles. If infeasible, returns a high penalty.
+        """
+        # ------------------ Step 1: Decode Positions to a Customer Permutation ------------------
+        # Assume positions list is of length equal to the number of customers.
+        # Sort customer indices based on the continuous values.
+        sorted_indices = sorted(range(len(positions)), key=lambda i: positions[i])
+        # Create an ordered list of customers to be visited.
+        ordered_customers = [self.customers[i] for i in sorted_indices]
+
+        # ------------------ Step 2: Split the Permutation into Routes ------------------
+        total_distance = 0.0
+        vehicle_index = 0  # index for the current vehicle in self.vehicles
+        
+        # Initialize the first vehicle's state (start at the depot with zero load/time)
+        current_vehicle = Vehicle(
+            _id=vehicle_index,
+            capacity=self.vehicle_capacity,
+            load=0.0,
+            current_time=0.0
+        )
+        # Start the route from the depot.
+        last_node = self.depot
+        route_distance = 0.0
+
+        # Loop through each customer in the ordered permutation.
+        for customer in ordered_customers:
+            # Calculate travel time from the last node to the customer.
+            travel_time = self.euclidean_distance(last_node, customer)
+            arrival_time = current_vehicle.current_time + travel_time
+
+            # Respect the customer's time window: wait if arriving too early.
+            if arrival_time < customer.early:
+                arrival_time = customer.early
+
+            # Check if the customer can be feasibly served by the current vehicle.
+            # Two checks: (i) Time window feasibility and (ii) Vehicle capacity.
+            if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
+                # End the current route: add the return trip to the depot.
+                route_distance += self.euclidean_distance(last_node, self.depot)
+                total_distance += route_distance
+
+                # Move to the next available vehicle.
+                vehicle_index += 1
+                if vehicle_index >= self.num_vehicles:
+                    # If no more vehicles are available, return a penalty cost (infeasible solution).
+                    return float('inf')
+                
+                # Reinitialize the new vehicle from the depot.
+                current_vehicle = Vehicle(
+                    _id=vehicle_index,
+                    capacity=self.vehicle_capacity,
+                    load=0.0,
+                    current_time=0.0
+                )
+                # Reset the route distance and last node.
+                route_distance = 0.0
+                last_node = self.depot
+
+                # Recalculate travel details from the depot to the current customer.
+                travel_time = self.euclidean_distance(last_node, customer)
+                arrival_time = current_vehicle.current_time + travel_time
+                if arrival_time < customer.early:
+                    arrival_time = customer.early
+
+                # If even after starting from the depot the customer cannot be served, mark as infeasible.
+                if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
+                    return float('inf')
+            
+            # ------------------ Step 3: Add Customer to the Current Route ------------------
+            # Add the travel time from last node to the customer.
+            route_distance += travel_time
+            # Update the vehicle's current time (arrival plus service time at the customer).
+            current_vehicle.current_time = arrival_time + customer.service
+            # Add the customer's demand to the vehicle's load.
+            current_vehicle.load += customer.demand
+
+            # Set the current customer as the last node for the next iteration.
+            last_node = customer
+
+        # After visiting all customers, finish the last route by returning to the depot.
+        route_distance += self.euclidean_distance(last_node, self.depot)
+        total_distance += route_distance
+
+        # ------------------ Step 4: Return the Objective Value ------------------
+        return total_distance
+
 if __name__ == "__main__":
     instance = Problem()
     instance.load_data("data/25/C101_co_25.txt")
@@ -120,3 +229,12 @@ if __name__ == "__main__":
     print(f"First {instance.num_lockers if instance.num_lockers < 5 else 5} lockers:")
     for locker in instance.lockers[:5]:
         print("\t",locker)
+
+    # Generate random positions for the customers
+    import random
+    positions = [random.random() for _ in range(instance.num_customers)]
+    print("Random positions: ", positions)
+    total_distance = instance.evaluate(positions)
+    print("Total distance: ", total_distance)
+
+    
