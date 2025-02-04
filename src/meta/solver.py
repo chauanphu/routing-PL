@@ -1,5 +1,9 @@
 import math
+import time
+import numpy as np
 from pydantic import BaseModel
+from scipy.stats import ttest_ind
+from matplotlib import pyplot as plt
 
 class Node(BaseModel):
     """
@@ -216,6 +220,203 @@ class Problem:
         # ------------------ Step 4: Return the Objective Value ------------------
         return total_distance
 
+    def to_route(self, positions: list[float]) -> tuple[float, list[list[Node]]]:
+        """
+        Decode the positions (continuous values) to a permutation of customer visits,
+        split the permutation into routes for vehicles while checking feasibility,
+        and compute the total travel distance along with the routes (as lists of Node).
+        
+        Parameters:
+            positions (list[float]): a list of continuous values associated with each customer.
+            
+        Returns:
+            A tuple (total_distance, routes) where:
+            - total_distance (float): total distance traveled by all vehicles. 
+                Returns float('inf') if the solution is infeasible.
+            - routes (list[list[Node]]): a list of routes, where each route is a list 
+                of Node objects (starting and ending at the depot).
+        """
+        # ------------------ Step 1: Decode Positions to a Customer Permutation ------------------
+        # Assume positions list is of length equal to the number of customers.
+        # Sort customer indices based on the continuous values.
+        sorted_indices = sorted(range(len(positions)), key=lambda i: positions[i])
+        # Create an ordered list of customers to be visited.
+        ordered_customers = [self.customers[i] for i in sorted_indices]
+
+        # ------------------ Step 2: Split the Permutation into Routes ------------------
+        total_distance = 0.0
+        routes = []  # List to store the routes (each route is a list of Node)
+        vehicle_index = 0  # index for the current vehicle in self.vehicles
+
+        # Initialize the first vehicle's state (start at the depot with zero load/time)
+        current_vehicle = Vehicle(
+            _id=vehicle_index,
+            capacity=self.vehicle_capacity,
+            load=0.0,
+            current_time=0.0
+        )
+        # Start the current route from the depot.
+        current_route = [self.depot]
+        last_node = self.depot
+        route_distance = 0.0
+
+        # Loop through each customer in the ordered permutation.
+        for customer in ordered_customers:
+            # Calculate travel time from the last node to the customer.
+            travel_time = self.euclidean_distance(last_node, customer)
+            arrival_time = current_vehicle.current_time + travel_time
+
+            # Respect the customer's time window: wait if arriving too early.
+            if arrival_time < customer.early:
+                arrival_time = customer.early
+
+            # Check if the customer can be feasibly served by the current vehicle.
+            # Two checks: (i) Time window feasibility and (ii) Vehicle capacity.
+            if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
+                # End the current route: add the return trip to the depot.
+                return_to_depot = self.euclidean_distance(last_node, self.depot)
+                route_distance += return_to_depot
+                current_route.append(self.depot)  # finish route at depot
+                total_distance += route_distance
+                routes.append(current_route)
+
+                # Move to the next available vehicle.
+                vehicle_index += 1
+                if vehicle_index >= self.num_vehicles:
+                    # If no more vehicles are available, return a penalty cost (infeasible solution).
+                    return float('inf'), []
+                
+                # Reinitialize the new vehicle from the depot.
+                current_vehicle = Vehicle(
+                    _id=vehicle_index,
+                    capacity=self.vehicle_capacity,
+                    load=0.0,
+                    current_time=0.0
+                )
+                # Reset the route details.
+                route_distance = 0.0
+                current_route = [self.depot]
+                last_node = self.depot
+
+                # Recalculate travel details from the depot to the current customer.
+                travel_time = self.euclidean_distance(last_node, customer)
+                arrival_time = current_vehicle.current_time + travel_time
+                if arrival_time < customer.early:
+                    arrival_time = customer.early
+
+                # If even after starting from the depot the customer cannot be served, mark as infeasible.
+                if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
+                    return float('inf'), []
+            
+            # ------------------ Step 3: Add Customer to the Current Route ------------------
+            # Add the travel time from last node to the customer.
+            route_distance += travel_time
+            current_route.append(customer)
+            # Update the vehicle's current time (arrival plus service time at the customer).
+            current_vehicle.current_time = arrival_time + customer.service
+            # Add the customer's demand to the vehicle's load.
+            current_vehicle.load += customer.demand
+
+            # Set the current customer as the last node for the next iteration.
+            last_node = customer
+
+        # After visiting all customers, finish the last route by returning to the depot.
+        return_to_depot = self.euclidean_distance(last_node, self.depot)
+        route_distance += return_to_depot
+        current_route.append(self.depot)
+        total_distance += route_distance
+        routes.append(current_route)
+
+        # ------------------ Step 4: Return the Objective Value and Routes ------------------
+        return total_distance, routes
+
+class Experiment:
+    def __init__(self, instance, solvers, num_experiments=50):
+        self.instance = instance
+        self.solver = solvers
+        self.num_experiments = num_experiments
+        self.results: dict = None
+
+    def run(self):
+        results = {s: {
+            "fitness": [],
+            "time": []
+        } for s in self.solver}
+        for _ in range(self.num_experiments):
+            print(f"Experiment {_ + 1}")
+            for s in self.solver:
+                start = time.time()
+                s.optimize(verbose=False)
+                end = time.time()
+                run_time = end - start
+                results[s]["fitness"].append(s.global_best_fitness)
+                results[s]["time"].append(run_time)
+        self.results = results
+        return results
+    
+    def report(self):
+        if self.results is None:
+            print("No results to report. Run the experiments first.")
+            return
+        
+        for s, r in self.results.items():
+            print(f"{s.__class__.__name__} Results:")
+            print(f"Mean Fitness: {np.mean(r['fitness'])}")
+            print(f"Std Fitness: {np.std(r['fitness'])}")
+            print(f"Mean Time: {np.mean(r['time'])}")
+            print(f"Std Time: {np.std(r['time'])}")
+        
+class Solver:
+    def __init__(self, objective_function, num_iterations, search_space):
+        self.objective_function = objective_function
+        self.num_iterations = num_iterations
+        self.search_space = search_space
+        self.global_best_position = None
+        self.global_best_fitness = float('inf')
+        self.fitness_history = []
+    
+    def optimize(self, verbose=True):
+        raise NotImplementedError
+    
+    def plot_fitness_history(self):
+        """
+        Plots the best fitness value over iterations.
+        """
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, self.num_iterations + 1), self.fitness_history, marker='o', linestyle='-', color='b')
+        plt.title('Fitness History')
+        plt.xlabel('Iteration')
+        plt.ylabel('Best Fitness')
+        plt.grid(True)
+        plt.show()
+
+    def plot_search_space(self):
+        """
+        Plots the contour of the 2D search space along with the best solution.
+        """
+        if len(self.search_space) != 2:
+            print("Search space must be 2D for visualization.")
+            return
+
+        x = np.linspace(self.search_space[0][0], self.search_space[0][1], 100)
+        y = np.linspace(self.search_space[1][0], self.search_space[1][1], 100)
+        X, Y = np.meshgrid(x, y)
+        
+        # Compute the objective function value for each (x, y)
+        Z = np.array([[self.objective_function([xi, yi]) for xi, yi in zip(x_row, y_row)] 
+                      for x_row, y_row in zip(X, Y)])
+        
+        plt.figure(figsize=(10, 6))
+        plt.contourf(X, Y, Z, levels=50, cmap='viridis')
+        plt.colorbar(label='Fitness')
+        if self.global_best_position:
+            plt.scatter(self.global_best_position[0], self.global_best_position[1], color='red', label='Best Solution')
+        plt.title('Search Space and Best Solution')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.legend()
+        plt.show()
+
 if __name__ == "__main__":
     instance = Problem()
     instance.load_data("data/25/C101_co_25.txt")
@@ -234,7 +435,12 @@ if __name__ == "__main__":
     import random
     positions = [random.random() for _ in range(instance.num_customers)]
     print("Random positions: ", positions)
-    total_distance = instance.evaluate(positions)
+    total_distance, routes = instance.result(positions)
     print("Total distance: ", total_distance)
+    print("Routes:")
+    for i, route in enumerate(routes):
+        print(f"Route {i + 1}:")
+        for node in route:
+            print("\t", node)
 
     

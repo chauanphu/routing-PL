@@ -35,18 +35,11 @@ class ParticleSwarmOptimization:
             c1 (float): Cognitive (personal) coefficient.
             c2 (float): Social (global) coefficient.
         """
-        self.objective_function = objective_function
-        self.num_particles = num_particles
-        self.num_iterations = num_iterations
-        self.search_space = search_space
+        super().__init__(objective_function, num_iterations=num_iterations, search_space=search_space)
         self.w = w
         self.c1 = c1
         self.c2 = c2
-        
         self.swarm = [self._initialize_particle() for _ in range(num_particles)]
-        self.global_best_position = None
-        self.global_best_fitness = float('inf')
-        self.fitness_history = []
 
     def _initialize_particle(self):
         """
@@ -101,42 +94,3 @@ class ParticleSwarmOptimization:
             if verbose:
                 print(f"Iteration {iteration + 1}: Global Best Fitness = {self.global_best_fitness}")
         return self.global_best_position, self.global_best_fitness
-
-    def plot_search_space(self):
-        """
-        Plots the contour of the 2D search space along with the best solution.
-        """
-        if len(self.search_space) != 2:
-            print("Search space must be 2D for visualization.")
-            return
-
-        x = np.linspace(self.search_space[0][0], self.search_space[0][1], 100)
-        y = np.linspace(self.search_space[1][0], self.search_space[1][1], 100)
-        X, Y = np.meshgrid(x, y)
-
-        Z = np.array([[self.objective_function([xi, yi]) for xi, yi in zip(x_row, y_row)]
-                      for x_row, y_row in zip(X, Y)])
-
-        plt.figure(figsize=(10, 6))
-        plt.contourf(X, Y, Z, levels=50, cmap='viridis')
-        plt.colorbar(label='Fitness')
-        if self.global_best_position is not None:
-            plt.scatter(self.global_best_position[0], self.global_best_position[1],
-                        color='red', label='Best Solution')
-        plt.title('Search Space and Best Solution (PSO)')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.legend()
-        plt.show()
-
-    def plot_fitness_history(self):
-        """
-        Plots the global best fitness over the iterations.
-        """
-        plt.figure(figsize=(10, 6))
-        plt.plot(range(1, self.num_iterations + 1), self.fitness_history, marker='o', linestyle='-', color='b')
-        plt.title('Fitness History (PSO)')
-        plt.xlabel('Iteration')
-        plt.ylabel('Global Best Fitness')
-        plt.grid(True)
-        plt.show()

@@ -2,7 +2,9 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 
-class GreyWolfOptimization:
+from meta.solver import Solver
+
+class GreyWolfOptimization(Solver):
     def __init__(self, objective_function, num_wolves, num_iterations, search_space):
         """
         Initializes the Grey Wolf Optimization instance.
@@ -13,13 +15,8 @@ class GreyWolfOptimization:
             num_iterations (int): The maximum number of iterations.
             search_space (list of tuples): The bounds for each dimension.
         """
-        self.objective_function = objective_function
+        super().__init__(objective_function, num_iterations=num_iterations, search_space=search_space)
         self.num_wolves = num_wolves
-        self.num_iterations = num_iterations
-        self.search_space = search_space
-        self.global_best_position = None
-        self.global_best_fitness = float('inf')
-        self.fitness_history = []
         self.wolves = [self._initialize_wolf() for _ in range(num_wolves)]
     
     def _initialize_wolf(self):
@@ -99,42 +96,3 @@ class GreyWolfOptimization:
                 print(f"Iteration {iteration + 1}: Best Fitness = {self.global_best_fitness}")
         
         return self.global_best_position, self.global_best_fitness
-    
-    def plot_search_space(self):
-        """
-        Plots the contour of the 2D search space along with the best solution.
-        """
-        if len(self.search_space) != 2:
-            print("Search space must be 2D for visualization.")
-            return
-
-        x = np.linspace(self.search_space[0][0], self.search_space[0][1], 100)
-        y = np.linspace(self.search_space[1][0], self.search_space[1][1], 100)
-        X, Y = np.meshgrid(x, y)
-        
-        # Compute the objective function value for each (x, y)
-        Z = np.array([[self.objective_function([xi, yi]) for xi, yi in zip(x_row, y_row)] 
-                      for x_row, y_row in zip(X, Y)])
-        
-        plt.figure(figsize=(10, 6))
-        plt.contourf(X, Y, Z, levels=50, cmap='viridis')
-        plt.colorbar(label='Fitness')
-        if self.global_best_position:
-            plt.scatter(self.global_best_position[0], self.global_best_position[1], color='red', label='Best Solution')
-        plt.title('Search Space and Best Solution')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.legend()
-        plt.show()
-    
-    def plot_fitness_history(self):
-        """
-        Plots the best fitness value over iterations.
-        """
-        plt.figure(figsize=(10, 6))
-        plt.plot(range(1, self.num_iterations + 1), self.fitness_history, marker='o', linestyle='-', color='b')
-        plt.title('Fitness History')
-        plt.xlabel('Iteration')
-        plt.ylabel('Best Fitness')
-        plt.grid(True)
-        plt.show()
