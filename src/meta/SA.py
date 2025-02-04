@@ -4,7 +4,7 @@ from solver import Problem
 
 class SimulatedAnnealing:
     def __init__(self, problem: Problem, init_temperature: float = 1000.0, cooling_rate: float = 0.995, 
-                 min_temperature: float = 0.5, iterations_per_temp: int = 100):
+                 min_temperature: float = 0.5, iterations_per_temp: int = 100, max_iters: int = 100):
         """
         Initialize the Simulated Annealing optimizer.
         
@@ -20,6 +20,7 @@ class SimulatedAnnealing:
         self.cooling_rate = cooling_rate
         self.min_temperature = min_temperature
         self.iterations_per_temp = iterations_per_temp
+        self.max_iters = max_iters
 
     def random_solution(self) -> list[float]:
         """
@@ -61,8 +62,11 @@ class SimulatedAnnealing:
         best_routes = current_routes
 
         # Main SA loop.
-        while self.T > self.min_temperature:
-            print(f"Temperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
+        iter_count = 0
+        while self.T > self.min_temperature and iter_count < self.max_iters:
+            iter_count += 1
+            print(f"Iteraion: {iter_count}/{self.max_iters}")
+            # print(f"Temperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
             for _ in range(self.iterations_per_temp):
                 # Generate a neighboring solution.
                 candidate_solution = self.neighbor(current_solution)
@@ -92,7 +96,7 @@ if __name__ == "__main__":
     
     # Create an instance of the Simulated Annealing optimizer.
     sa = SimulatedAnnealing(problem, init_temperature=1000.0, cooling_rate=0.995, 
-                            min_temperature=1e-3, iterations_per_temp=100)
+                            min_temperature=1e-3, iterations_per_temp=100, max_iters=1000)
     
     # Run the optimization.
     best_solution, best_cost, best_routes = sa.run()
