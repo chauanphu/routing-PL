@@ -102,7 +102,8 @@ class SimulatedAnnealing(Solver):
         found_best = False
         while self.T > self.min_temperature and iter_count < self.max_iters and non_improvement_count < self.non_improvement:
             iter_count += 1
-            print(f"Iteraion: {iter_count}/{self.max_iters}:\tTemperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
+            if verbose:
+                print(f"Iteraion: {iter_count}/{self.max_iters}:\tTemperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
             # print(f"Temperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
             for _ in range(self.iterations_per_temp):
                     # Generate a neighboring solution.

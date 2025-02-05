@@ -148,8 +148,9 @@ class GreyWolfOptimization(Solver):
                     
                     new_position.append(new_j)
                 # Apply local search to the new position.
-                improved_position = self.local_search(new_position)
-                new_wolves.append(improved_position)
+                if self.local_search_iterations is not None:
+                    new_position = self.local_search(new_position)
+                new_wolves.append(new_position)
             # Update the wolves' positions for the next iteration
             self.wolves = new_wolves
             

@@ -56,6 +56,7 @@ class ParticleSwarmOptimization(Solver):
         """
         Runs the PSO algorithm and returns the best solution and its fitness.
         """
+        self.fitness_history = []
         for iteration in range(self.num_iterations):
             for particle in self.swarm:
                 # Evaluate fitness and update personal best

@@ -592,24 +592,31 @@ class Solver:
 class Experiment:
     def __init__(self, instance, solvers, num_experiments=50):
         self.instance = instance
-        self.solvers: list[Solver] = solvers
+        self.solvers: list[Solver] = []
+        self.names = []
+        for s, name in solvers:
+            self.solvers.append(s)
+            self.names.append(name)
         self.num_experiments = num_experiments
         self.results: dict = None
 
     def run(self):
         results = {s: {
+            "name": name,
             "fitness": [],
             "time": []
-        } for s in self.solvers}
+        } for s, name in zip(self.solvers, self.names)}
         for _ in range(self.num_experiments):
             print(f"Experiment {_ + 1}")
             for s in self.solvers:
+                print("\t", results[s]["name"], end=": ")
                 start = time.time()
                 s.optimize(verbose=False)
                 end = time.time()
                 run_time = end - start
                 results[s]["fitness"].append(s.global_best_fitness)
                 results[s]["time"].append(run_time)
+                print(f"Done: Fitness = {s.global_best_fitness}, Time = {run_time:.2f} sec")
         self.results = results
         return results
     
@@ -619,11 +626,12 @@ class Experiment:
             return
         
         for s, r in self.results.items():
-            print(f"{s.__class__.__name__} Results:")
+            print(f"\nSolver: {r['name']}")
             print(f"Mean Fitness: {np.mean(r['fitness'])}")
             print(f"Std Fitness: {np.std(r['fitness'])}")
             print(f"Mean Time: {np.mean(r['time'])}")
             print(f"Std Time: {np.std(r['time'])}")
+            print("-"*20)
 
 def print_routes(routes: list[list[Node]]):
     print("Number of routes: ", len(routes))
