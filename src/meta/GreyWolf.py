@@ -1,11 +1,9 @@
 import random
-import matplotlib.pyplot as plt
-import numpy as np
 
 from meta.solver import Solver
 
 class GreyWolfOptimization(Solver):
-    def __init__(self, objective_function, num_wolves, num_iterations, search_space):
+    def __init__(self, objective_function, search_space, num_wolves=30, num_iterations=100, local_search_iterations=10):
         """
         Initializes the Grey Wolf Optimization instance.
         
@@ -18,13 +16,76 @@ class GreyWolfOptimization(Solver):
         super().__init__(objective_function, num_iterations=num_iterations, search_space=search_space)
         self.num_wolves = num_wolves
         self.wolves = [self._initialize_wolf() for _ in range(num_wolves)]
-    
+        self.local_search_iterations = local_search_iterations
+
     def _initialize_wolf(self):
         """
         Initializes a wolf's position randomly within the search space.
         """
         return [random.uniform(self.search_space[i][0], self.search_space[i][1]) 
                 for i in range(len(self.search_space))]
+    
+    def neighbor(self, solution: list[float]) -> list[float]:
+        """
+        Generate a neighbor solution by perturbing one or more positions.
+        Three moves are possible:
+          - Swap: Exchange two elements.
+          - Insertion: Remove an element and insert it at another position.
+          - Inversion: Reverse a sublist.
+          
+        Note: In this continuous formulation, all decision variables can be perturbed.
+        (If some dimensions must be fixed, add appropriate restrictions.)
+        """
+        neighbor_solution = solution.copy()
+        move_choice = random.random()  # random float in [0, 1)
+        n = len(neighbor_solution)
+        
+        if move_choice < 1/3:
+            # Swap: randomly select two distinct indices and swap their values.
+            i, j = random.sample(range(n), 2)
+            neighbor_solution[i], neighbor_solution[j] = neighbor_solution[j], neighbor_solution[i]
+            
+        elif move_choice < 2/3:
+            # Insertion: remove an element from a random position and insert it at another.
+            i = random.randrange(n)
+            element = neighbor_solution.pop(i)
+            j = random.randrange(n)
+            neighbor_solution.insert(j, element)
+            
+        else:
+            # Inversion: choose two indices and reverse the sublist between them (inclusive).
+            i, j = sorted(random.sample(range(n), 2))
+            neighbor_solution[i:j+1] = neighbor_solution[i:j+1][::-1]
+            
+        # After generating a neighbor, ensure each dimension is within the search space bounds.
+        for idx, (lb, ub) in enumerate(self.search_space):
+            neighbor_solution[idx] = max(lb, min(neighbor_solution[idx], ub))
+            
+        return neighbor_solution
+    
+    def local_search(self, solution: list[float]) -> list[float]:
+        """
+        Apply a hill-climbing local search to improve the solution.
+        For a fixed number of iterations, a neighbor is generated.
+        If the neighbor has a better objective value, it is accepted.
+        
+        Parameters:
+            solution (list[float]): The current solution.
+            
+        Returns:
+            best_solution (list[float]): The locally improved solution.
+        """
+        best_solution = solution.copy()
+        best_fitness = self.objective_function(best_solution)
+        
+        for _ in range(self.local_search_iterations):
+            candidate = self.neighbor(best_solution)
+            candidate_fitness = self.objective_function(candidate)
+            if candidate_fitness < best_fitness:
+                best_solution = candidate
+                best_fitness = candidate_fitness
+                
+        return best_solution
     
     def optimize(self, verbose=True):
         """
