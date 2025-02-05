@@ -1,10 +1,10 @@
 import random
 import math
-from solver import Problem
+from solver import Node, Problem, Solver, print_routes
 
-class SimulatedAnnealing:
-    def __init__(self, problem: Problem, init_temperature: float = 1000.0, cooling_rate: float = 0.995, 
-                 min_temperature: float = 0.5, iterations_per_temp: int = 100, max_iters: int = 100):
+class SimulatedAnnealing(Solver):
+    def __init__(self, problem: Problem, init_temperature: float = 1000.0, cooling_rate: float = 0.995, beta: float = 1.0,
+                 min_temperature: float = 0.5, iterations_per_temp: int = 100, max_iters: int = 100, non_improvement: int = 100):
         """
         Initialize the Simulated Annealing optimizer.
         
@@ -15,37 +15,70 @@ class SimulatedAnnealing:
             min_temperature (float): stopping temperature.
             iterations_per_temp (int): number of candidate moves per temperature.
         """
+        super().__init__()
         self.problem = problem
         self.T = init_temperature
         self.cooling_rate = cooling_rate
+        self.beta = beta
         self.min_temperature = min_temperature
         self.iterations_per_temp = iterations_per_temp
         self.max_iters = max_iters
+        self.non_improvement = non_improvement
+        self.num_iterations = 0
 
-    def random_solution(self) -> list[float]:
-        """
-        Generate a random continuous solution.
-        Each customer is assigned a random value in [0,1].
-        """
-        n = self.problem.num_customers
-        return [random.random() for _ in range(n)]
-    
-    def neighbor(self, solution: list[float]) -> list[float]:
+    def neighbor(self, solution: list[Node]) -> list[Node]:
         """
         Generate a neighbor solution by perturbing one or more positions.
-        Here, we perturb one randomly chosen element by adding a small Gaussian noise.
+        Three types of neighborhood moves are used:
+        - Swap: Two elements are exchanged.
+        - Insertion: An element is removed from one position and inserted at another.
+        - Inversion: A sublist of the solution is reversed.
+        
+        The move is chosen randomly:
+        if random < 1/3: swap,
+        if 1/3 <= random < 2/3: insertion,
+        else: inversion.
+        
+        Parameters:
+            solution (list[float]): The current solution (continuous values).
+        
+        Returns:
+            neighbor_solution (list[float]): A new solution after applying a perturbation.
         """
+        # Copy the solution to avoid modifying the original.
         neighbor_solution = solution.copy()
-        # Choose a random index to perturb.
-        idx = random.randrange(len(solution))
-        # Perturb using Gaussian noise.
-        perturbation = random.gauss(0, 0.1)
-        neighbor_solution[idx] += perturbation
-        # Optionally clip the value to keep it in [0,1].
-        neighbor_solution[idx] = max(0.0, min(1.0, neighbor_solution[idx]))
+        
+        # Determine the range for customer indices (exclude first and last positions).
+        n = len(neighbor_solution)
+        if n <= 2:
+            return neighbor_solution  # Nothing to change if there are no customer positions.
+        
+        customer_indices = list(range(1, n - 1))
+        move_choice = random.random()  # random float in [0, 1)
+        
+        if move_choice < 1/3:
+            # Swap: randomly select two distinct customer indices and swap their values.
+            i, j = random.sample(customer_indices, 2)
+            neighbor_solution[i], neighbor_solution[j] = neighbor_solution[j], neighbor_solution[i]
+        
+        elif move_choice < 2/3:
+            # Insertion: remove an element from a random customer position and insert it at another random position.
+            i = random.choice(customer_indices)
+            element = neighbor_solution.pop(i)
+            # Adjust the available indices after removal.
+            new_customer_indices = list(range(1, n - 1))
+            # Choose a new position from the new indices.
+            j = random.choice(new_customer_indices)
+            neighbor_solution.insert(j, element)
+        
+        else:
+            # Inversion: choose two customer indices and reverse the sublist between them (inclusive).
+            i, j = sorted(random.sample(customer_indices, 2))
+            neighbor_solution[i:j+1] = neighbor_solution[i:j+1][::-1]
+        
         return neighbor_solution
     
-    def run(self) -> tuple[list[float], float, list[list]]:
+    def optimize(self, verbose=True) -> tuple[list[float], float, list[list]]:
         """
         Run the Simulated Annealing optimization.
         
@@ -55,26 +88,30 @@ class SimulatedAnnealing:
             best_routes (list[list[Node]]): the corresponding list of routes (each route is a list of Node objects).
         """
         # Generate an initial solution.
-        current_solution = self.random_solution()
-        current_cost, current_routes = self.problem.to_route(current_solution)
+        # 1. Generate a random solution.
+        current_solution = self.problem.random_route()
+        current_cost, current_routes = self.problem.permu2route(current_solution)
+        # 2. Initialize best solution with the random solution.
         best_solution = current_solution
         best_cost = current_cost
         best_routes = current_routes
-
+        # 3. Print initial solution.
         # Main SA loop.
         iter_count = 0
-        while self.T > self.min_temperature and iter_count < self.max_iters:
+        non_improvement_count = 0
+        found_best = False
+        while self.T > self.min_temperature and iter_count < self.max_iters and non_improvement_count < self.non_improvement:
             iter_count += 1
-            print(f"Iteraion: {iter_count}/{self.max_iters}")
+            print(f"Iteraion: {iter_count}/{self.max_iters}:\tTemperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
             # print(f"Temperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
             for _ in range(self.iterations_per_temp):
-                # Generate a neighboring solution.
+                    # Generate a neighboring solution.
                 candidate_solution = self.neighbor(current_solution)
-                candidate_cost, candidate_routes = self.problem.to_route(candidate_solution)
+                candidate_cost, candidate_routes = self.problem.permu2route(candidate_solution)
                 delta = candidate_cost - current_cost
                 
                 # Accept the candidate if it's better, or with a probability if worse.
-                if delta < 0 or random.random() < math.exp(-delta / self.T):
+                if delta < 0 or random.random() < math.exp(-delta / (self.beta * self.T)):
                     current_solution = candidate_solution
                     current_cost = candidate_cost
                     current_routes = candidate_routes
@@ -83,11 +120,21 @@ class SimulatedAnnealing:
                         best_solution = candidate_solution
                         best_cost = candidate_cost
                         best_routes = candidate_routes
+                        non_improvement_count = 0
+                        found_best = True
             
             # Cool down the temperature.
             self.T *= self.cooling_rate
-        
-        return best_solution, best_cost, best_routes
+            if not found_best:
+                non_improvement_count += 1
+                found_best = True
+            self.fitness_history.append(best_cost)
+
+        self.global_best_position = best_solution
+        self.global_best_fitness = best_cost
+        self.num_iterations = iter_count
+
+        return best_solution, best_cost
     
 if __name__ == "__main__":
     # Assuming you have already created and loaded your Problem instance.
@@ -95,13 +142,12 @@ if __name__ == "__main__":
     problem.load_data("data/25/C101_co_25.txt")  # Make sure your data file is correctly formatted.
     
     # Create an instance of the Simulated Annealing optimizer.
-    sa = SimulatedAnnealing(problem, init_temperature=1000.0, cooling_rate=0.995, 
-                            min_temperature=1e-3, iterations_per_temp=100, max_iters=1000)
+    sa = SimulatedAnnealing(problem, init_temperature=10.0, cooling_rate=0.97, beta=1.0,
+                            min_temperature=0.1, iterations_per_temp=600, max_iters=200, non_improvement=50)
     
     # Run the optimization.
-    best_solution, best_cost, best_routes = sa.run()
-    
+    sa.optimize()
+    best_cost, best_solution = problem.permu2route(sa.global_best_position)
     print("Distance: ", best_cost)
-    print("Number of routes: ", len(best_routes))
-    print("Longest route: ", max([len(route) for route in best_routes]))
-    print("Shortest route: ", min([len(route) for route in best_routes]))
+    print_routes(best_solution)
+    sa.plot_fitness_history()

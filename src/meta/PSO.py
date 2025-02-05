@@ -1,7 +1,6 @@
 import random
-import time
-import matplotlib.pyplot as plt
-import numpy as np
+
+from meta.solver import Solver
 
 class Particle:
     def __init__(self, position, velocity):
@@ -20,7 +19,7 @@ class Particle:
             self.best_position = self.position.copy()
         return fitness
 
-class ParticleSwarmOptimization:
+class ParticleSwarmOptimization(Solver):
     def __init__(self, objective_function, num_particles, num_iterations, search_space,
                  w=0.5, c1=1.5, c2=1.5):
         """
