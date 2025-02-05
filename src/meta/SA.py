@@ -89,7 +89,7 @@ class SimulatedAnnealing(Solver):
         """
         # Generate an initial solution.
         # 1. Generate a random solution.
-        current_solution = self.problem.random_route()
+        current_solution = self.problem.initialize_solution(p=0.5)[0]
         current_cost, current_routes = self.problem.permu2route(current_solution)
         # 2. Initialize best solution with the random solution.
         best_solution = current_solution
@@ -140,7 +140,7 @@ class SimulatedAnnealing(Solver):
 if __name__ == "__main__":
     # Assuming you have already created and loaded your Problem instance.
     problem = Problem()
-    problem.load_data("data/25/C101_co_25.txt")  # Make sure your data file is correctly formatted.
+    problem.load_data("data/25/C102_co_25.txt")  # Make sure your data file is correctly formatted.
     
     # Create an instance of the Simulated Annealing optimizer.
     sa = SimulatedAnnealing(problem, init_temperature=10.0, cooling_rate=0.97, beta=1.0,
@@ -150,5 +150,6 @@ if __name__ == "__main__":
     sa.optimize()
     best_cost, best_solution = problem.permu2route(sa.global_best_position)
     print("Distance: ", best_cost)
+    print("Solution: ", [node for node in sa.global_best_position])
     print_routes(best_solution)
     sa.plot_fitness_history()
