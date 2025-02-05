@@ -147,8 +147,9 @@ class GreyWolfOptimization(Solver):
                     new_j = max(lower_bound, min(new_j, upper_bound))
                     
                     new_position.append(new_j)
-                new_wolves.append(new_position)
-            
+                # Apply local search to the new position.
+                improved_position = self.local_search(new_position)
+                new_wolves.append(improved_position)
             # Update the wolves' positions for the next iteration
             self.wolves = new_wolves
             
