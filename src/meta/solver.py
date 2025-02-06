@@ -524,6 +524,7 @@ class Solver:
         self.num_iterations = num_iterations
         self.global_best_position = None
         self.global_best_fitness = float('inf')
+        self.global_best_routes = []
         self.fitness_history = []
     
     def optimize(self, verbose=True) -> tuple[list[any], float]:
@@ -566,6 +567,42 @@ class Solver:
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.legend()
+        plt.show()
+
+    def plot_routes(self, routes: list[list[Node]] = None) -> None:
+        """
+        Plot the routes for the VRP.
+        
+        Parameters:
+            routes (list[list[Node]]): A list of routes, where each route is a list of Node objects.
+                                    It is assumed that each route starts and ends at the depot.
+        """
+        plt.figure(figsize=(10, 8))
+        
+        # Define a set of colors to cycle through for different routes.
+        colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'orange']
+        if routes is None:
+            routes = self.global_best_routes
+            
+        for i, route in enumerate(routes):
+            # Extract the x and y coordinates for each node in the route.
+            xs = [node.x for node in route]
+            ys = [node.y for node in route]
+            color = colors[i % len(colors)]
+            
+            # Plot the route as a line connecting the nodes.
+            plt.plot(xs, ys, marker='o', linestyle='-', color=color, label=f"Route {i+1}")
+            
+            # Optionally, annotate each node with its node_id.
+            for node in route:
+                plt.text(node.x, node.y, f"{node.node_id}", fontsize=9, color=color,
+                        verticalalignment='bottom', horizontalalignment='right')
+        
+        plt.title("VRP Routes")
+        plt.xlabel("X coordinate")
+        plt.ylabel("Y coordinate")
+        plt.legend()
+        plt.grid(True)
         plt.show()
 
 class Experiment:

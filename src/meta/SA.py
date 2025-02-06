@@ -153,9 +153,4 @@ if __name__ == "__main__":
     print("Solution: ", [node for node in sa.global_best_position])
     print_routes(sa.global_best_routes)
     sa.plot_fitness_history()
-        # Save the routes to a file
-    with open("solution.txt", "w") as f:
-        for route in sa.global_best_routes:
-            for node in route:
-                f.write(f"{node.node_id} ")
-            f.write("\n")
+    sa.plot_routes()

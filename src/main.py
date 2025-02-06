@@ -15,3 +15,4 @@ routes: list[list[Node]]
 print("Distance: ", gwo.global_best_fitness)
 print_routes(gwo.global_best_routes)
 gwo.plot_fitness_history()
+gwo.plot_routes()
