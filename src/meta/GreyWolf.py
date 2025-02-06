@@ -1,9 +1,9 @@
 import random
 
-from meta.solver import Solver
+from meta.solver import Problem, Solver
 
 class GreyWolfOptimization(Solver):
-    def __init__(self, objective_function, search_space, num_wolves=30, num_iterations=100, local_search_iterations=10):
+    def __init__(self, problem: Problem, num_wolves=30, num_iterations=100, local_search_iterations=10):
         """
         Initializes the Grey Wolf Optimization instance.
         
@@ -13,17 +13,18 @@ class GreyWolfOptimization(Solver):
             num_iterations (int): The maximum number of iterations.
             search_space (list of tuples): The bounds for each dimension.
         """
-        super().__init__(objective_function, num_iterations=num_iterations, search_space=search_space)
+        super().__init__(problem.position2route, num_iterations=num_iterations)
+        self.instance: Problem = problem
         self.num_wolves = num_wolves
         self.wolves = [self._initialize_wolf() for _ in range(num_wolves)]
         self.local_search_iterations = local_search_iterations
+        self.search_space = self.instance.get_search_space()
 
     def _initialize_wolf(self):
         """
         Initializes a wolf's position randomly within the search space.
         """
-        return [random.uniform(self.search_space[i][0], self.search_space[i][1]) 
-                for i in range(len(self.search_space))]
+        return self.instance.initialize_position(p=0.5)
     
     def neighbor(self, solution: list[float]) -> list[float]:
         """
@@ -76,11 +77,11 @@ class GreyWolfOptimization(Solver):
             best_solution (list[float]): The locally improved solution.
         """
         best_solution = solution.copy()
-        best_fitness = self.objective_function(best_solution)
+        best_fitness, best_routes = self.objective_function(best_solution)
         
         for _ in range(self.local_search_iterations):
             candidate = self.neighbor(best_solution)
-            candidate_fitness = self.objective_function(candidate)
+            candidate_fitness, candidate_routes = self.objective_function(candidate)
             if candidate_fitness < best_fitness:
                 best_solution = candidate
                 best_fitness = candidate_fitness
@@ -93,8 +94,8 @@ class GreyWolfOptimization(Solver):
         """
         for iteration in range(self.num_iterations):
             # Evaluate fitness for each wolf
-            fitnesses = [self.objective_function(wolf) for wolf in self.wolves]
-            
+            result = [self.objective_function(wolf) for wolf in self.wolves]
+            fitnesses, routes = zip(*result)
             # Identify the top three wolves (alpha, beta, and delta)
             sorted_indices = sorted(range(self.num_wolves), key=lambda i: fitnesses[i])
             alpha = self.wolves[sorted_indices[0]]
@@ -104,8 +105,9 @@ class GreyWolfOptimization(Solver):
             # Update the overall best solution
             if fitnesses[sorted_indices[0]] < self.global_best_fitness:
                 self.global_best_fitness = fitnesses[sorted_indices[0]]
+                self.global_best_routes = routes[sorted_indices[0]]
                 self.global_best_position = alpha.copy()
-            
+
             # Coefficient 'a' decreases linearly from 2 to 0 over iterations
             a = 2 - iteration * (2 / self.num_iterations)
             

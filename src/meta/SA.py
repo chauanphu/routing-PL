@@ -141,7 +141,7 @@ class SimulatedAnnealing(Solver):
 if __name__ == "__main__":
     # Assuming you have already created and loaded your Problem instance.
     problem = Problem()
-    problem.load_data("data/25/C103_co_25.txt")  # Make sure your data file is correctly formatted.
+    problem.load_data("data/25/C102_co_25.txt")  # Make sure your data file is correctly formatted.
     
     # Create an instance of the Simulated Annealing optimizer.
     sa = SimulatedAnnealing(problem, init_temperature=10.0, cooling_rate=0.97, beta=1.0,

@@ -143,21 +143,7 @@ class Problem:
         # For type 2 and type 3, assign the selected (nearest) parcel locker station.
         assignment_list = []
         for customer in sorted_customers:
-            if customer.customer_type == 1:
-                chosen_node = customer
-                customer.locker_delivery = False
-            elif customer.customer_type == 2:
-                chosen_node = customer.assigned_locker
-                customer.locker_delivery = True
-            elif customer.customer_type == 3:
-                if random.random() < p:
-                    chosen_node = customer.assigned_locker
-                    customer.locker_delivery = True
-                else:
-                    chosen_node = customer
-                    customer.locker_delivery = False
-            else:
-                chosen_node = customer
+            chosen_node, chosen_node = self._locker_assignment(customer, explore=False, p=p)
             assignment_list.append((customer, chosen_node))
         
         # --- Step 2: Nearest-Neighbor Ordering ---
@@ -187,6 +173,58 @@ class Problem:
         
         return solution
     
+    def initialize_position(self, p: float) -> list[float]:
+        """
+        Generate an initial continuous position vector for customers in [0,1) such that
+        customers that are near each other (based on their chosen delivery node, taking into
+        account locker assignment) get positions with similar values.
+        
+        The procedure is as follows:
+        1. For each customer, decide its locker delivery preference via _locker_assignment.
+        2. Starting at the depot, build a nearest-neighbor ordering using the chosen delivery node.
+        3. Assign positions in increasing order along [0,1), with a small random perturbation.
+        
+        Returns:
+            positions (list[float]): A list of continuous values (one per customer) in [0,1).
+                                    When sorted, the customer order reflects the nearest-neighbor ordering.
+        """
+        # Step 1: Create a list of (customer, chosen_node) tuples using the locker assignment.
+        assignment_list = []
+        for customer in self.customers:
+            chosen_node, _ = self._locker_assignment(customer, explore=False, p=p)
+            assignment_list.append((customer, chosen_node))
+        
+        # Step 2: Build a nearest-neighbor ordering starting from the depot.
+        ordered_customers = []
+        current_node = self.depot
+        while assignment_list:
+            # Find the tuple (customer, chosen_node) whose chosen_node is nearest to current_node.
+            best_tuple = min(assignment_list, key=lambda tup: self.euclidean_distance(current_node, tup[1]))
+            ordered_customers.append(best_tuple[0])
+            current_node = best_tuple[1]
+            assignment_list.remove(best_tuple)
+        
+        # Step 3: Assign continuous positions based on the ordering.
+        n = len(self.customers)
+        positions = [0.0] * n  # Placeholder: one position per customer.
+        
+        # We assign positions in increasing order. Adding a small noise helps keep values unique.
+        for order, customer in enumerate(ordered_customers):
+            # Evenly space the positions in [0,1). For example, position base = order / n.
+            base = order / n
+            # Add a small noise in the range [-0.5/n, 0.5/n].
+            noise = random.uniform(-0.5 / n, 0.5 / n)
+            pos = base + noise
+            # Ensure that the final value remains in [0,1)
+            pos = max(0.0, min(1.0 - 1e-8, pos))
+            # Place the position in the output list.
+            # Here we assume that self.customers is stored in a fixed order and that the index of a customer
+            # in self.customers corresponds to its dimension in the positions vector.
+            index = self.customers.index(customer)
+            positions[index] = pos
+    
+        return positions
+
     def get_search_space(self) -> list[tuple[float, float]]:
         """
         Get the search space for the problem.
@@ -196,169 +234,76 @@ class Problem:
         """
         return [(0.0, 1.0) for _ in range(self.num_customers)]
 
-    def evaluate_position(self, positions: list[float]) -> float:
-        """
-        Decode the positions (continuous values) to a permutation of customer visits,
-        split the permutation into routes for vehicles while checking feasibility,
-        and compute the total travel distance.
-        
-        Parameters:
-            positions (list[float]): a list of continuous values associated with each customer.
-            
-        Returns:
-            total_distance (float): total distance traveled by all vehicles. If infeasible, returns a high penalty.
-        """
-        # ------------------ Step 1: Decode Positions to a Customer Permutation ------------------
-        # Assume positions list is of length equal to the number of customers.
-        # Sort customer indices based on the continuous values.
-        sorted_indices = sorted(range(len(positions)), key=lambda i: positions[i])
-        # Create an ordered list of customers to be visited.
-        ordered_customers = [self.customers[i] for i in sorted_indices]
-
-        # ------------------ Step 2: Split the Permutation into Routes ------------------
-        total_distance = 0.0
-        vehicle_index = 0  # index for the current vehicle in self.vehicles
-        
-        # Initialize the first vehicle's state (start at the depot with zero load/time)
-        current_vehicle = Vehicle(
-            v_id=vehicle_index,
-            capacity=self.vehicle_capacity,
-            load=0.0,
-            current_time=0.0
-        )
-        # Start the route from the depot.
-        last_node = self.depot
-        route_distance = 0.0
-
-        # Loop through each customer in the ordered permutation.
-        for customer in ordered_customers:
-            # Calculate travel time from the last node to the customer.
-            travel_time = self.euclidean_distance(last_node, customer)
-            arrival_time = current_vehicle.current_time + travel_time
-
-            # Respect the customer's time window: wait if arriving too early.
-            if arrival_time < customer.early:
-                arrival_time = customer.early
-
-            # Check if the customer can be feasibly served by the current vehicle.
-            # Two checks: (i) Time window feasibility and (ii) Vehicle capacity.
-            if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
-                # End the current route: add the return trip to the depot.
-                route_distance += self.euclidean_distance(last_node, self.depot)
-                total_distance += route_distance
-
-                # Move to the next available vehicle.
-                vehicle_index += 1
-                if vehicle_index >= self.num_vehicles:
-                    # If no more vehicles are available, return a penalty cost (infeasible solution).
-                    return float('inf')
-                
-                # Reinitialize the new vehicle from the depot.
-                current_vehicle = Vehicle(
-                    v_id=vehicle_index,
-                    capacity=self.vehicle_capacity,
-                    load=0.0,
-                    current_time=0.0
-                )
-                # Reset the route distance and last node.
-                route_distance = 0.0
-                last_node = self.depot
-
-                # Recalculate travel details from the depot to the current customer.
-                travel_time = self.euclidean_distance(last_node, customer)
-                arrival_time = current_vehicle.current_time + travel_time
-                if arrival_time < customer.early:
-                    arrival_time = customer.early
-
-                # If even after starting from the depot the customer cannot be served, mark as infeasible.
-                if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
-                    return float('inf')
-            
-            # ------------------ Step 3: Add Customer to the Current Route ------------------
-            # Add the travel time from last node to the customer.
-            route_distance += travel_time
-            # Update the vehicle's current time (arrival plus service time at the customer).
-            current_vehicle.current_time = arrival_time + customer.service
-            # Add the customer's demand to the vehicle's load.
-            current_vehicle.load += customer.demand
-
-            # Set the current customer as the last node for the next iteration.
-            last_node = customer
-
-        # After visiting all customers, finish the last route by returning to the depot.
-        route_distance += self.euclidean_distance(last_node, self.depot)
-        total_distance += route_distance
-
-        # ------------------ Step 4: Return the Objective Value ------------------
-        return total_distance
-
     def position2route(self, positions: list[float]) -> tuple[float, list[list[Node]]]:
         """
         Decode the positions (continuous values) to a permutation of customer visits,
-        split the permutation into routes for vehicles while checking feasibility,
-        and compute the total travel distance along with the routes (as lists of Node).
+        perform locker assignment similar to permu2route, split the permutation into routes 
+        for vehicles (with depot at the beginning and end of each route), and compute the total 
+        travel distance. If a route is infeasible (due to time windows, capacity, or duplicate locker
+        visits), a penalty (float('inf')) is returned.
         
         Parameters:
-            positions (list[float]): a list of continuous values associated with each customer.
-            
+            positions (list[float]): A list of continuous values (one per customer) in [0,1).
+        
         Returns:
             A tuple (total_distance, routes) where:
-            - total_distance (float): total distance traveled by all vehicles. 
-                Returns float('inf') if the solution is infeasible.
-            - routes (list[list[Node]]): a list of routes, where each route is a list 
-                of Node objects (starting and ending at the depot).
+            - total_distance (float): The sum of travel distances of all routes (or float('inf') if infeasible).
+            - routes (list[list[Node]]): A list of routes (each route is a list of Node objects).
         """
-        # ------------------ Step 1: Decode Positions to a Customer Permutation ------------------
-        # Assume positions list is of length equal to the number of customers.
+        # --- Step 1: Decode Positions to an Ordered List of Customers ---
         # Sort customer indices based on the continuous values.
         sorted_indices = sorted(range(len(positions)), key=lambda i: positions[i])
-        # Create an ordered list of customers to be visited.
         ordered_customers = [self.customers[i] for i in sorted_indices]
-
-        # ------------------ Step 2: Split the Permutation into Routes ------------------
+        
+        # --- Step 2: Initialize Route and Vehicle State ---
+        routes = []
         total_distance = 0.0
-        routes = []  # List to store the routes (each route is a list of Node)
-        vehicle_index = 0  # index for the current vehicle in self.vehicles
 
-        # Initialize the first vehicle's state (start at the depot with zero load/time)
+        current_route = [self.depot]  # Each route starts with the depot.
+        vehicle_index = 0
         current_vehicle = Vehicle(
             v_id=vehicle_index,
             capacity=self.vehicle_capacity,
             load=0.0,
             current_time=0.0
         )
-        # Start the current route from the depot.
-        current_route = [self.depot]
         last_node = self.depot
         route_distance = 0.0
-
-        # Loop through each customer in the ordered permutation.
+        visited: set[int] = set()  # To check duplicate locker visits.
+        
+        # --- Step 3: Process Each Customer in the Order ---
         for customer in ordered_customers:
-            # Calculate travel time from the last node to the customer.
-            travel_time = self.euclidean_distance(last_node, customer)
+            # Locker Assignment: decide whether to deliver to the customer or its assigned locker.
+            chosen_node, _ = self._locker_assignment(customer, explore=False)
+            
+            # Compute travel time from the last node to the chosen node.
+            travel_time = self.euclidean_distance(last_node, chosen_node)
             arrival_time = current_vehicle.current_time + travel_time
+            if arrival_time < chosen_node.early:
+                arrival_time = chosen_node.early
 
-            # Respect the customer's time window: wait if arriving too early.
-            if arrival_time < customer.early:
-                arrival_time = customer.early
-
-            # Check if the customer can be feasibly served by the current vehicle.
-            # Two checks: (i) Time window feasibility and (ii) Vehicle capacity.
-            if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
-                # End the current route: add the return trip to the depot.
+            # Check if this customer (via chosen node) can be feasibly served:
+            # - Time window is met.
+            # - Vehicle has enough capacity.
+            # - A locker is not visited twice in a non-consecutive manner.
+            duplicate_lockers = (
+                (chosen_node.node_id in visited) and 
+                (chosen_node.node_id != self.depot.node_id) and 
+                (chosen_node.node_id != last_node.node_id)
+            )
+            if (arrival_time > chosen_node.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity) or duplicate_lockers:
+                # End current route: return to depot.
                 return_to_depot = self.euclidean_distance(last_node, self.depot)
                 route_distance += return_to_depot
-                current_route.append(self.depot)  # finish route at depot
+                current_route.append(self.depot)
                 total_distance += route_distance
                 routes.append(current_route)
 
-                # Move to the next available vehicle.
+                # Switch to the next available vehicle.
                 vehicle_index += 1
                 if vehicle_index >= self.num_vehicles:
-                    # If no more vehicles are available, return a penalty cost (infeasible solution).
-                    return float('inf'), []
+                    return float('inf'), []  # Infeasible: ran out of vehicles.
                 
-                # Reinitialize the new vehicle from the depot.
                 current_vehicle = Vehicle(
                     v_id=vehicle_index,
                     capacity=self.vehicle_capacity,
@@ -366,40 +311,34 @@ class Problem:
                     current_time=0.0
                 )
                 # Reset the route details.
-                route_distance = 0.0
                 current_route = [self.depot]
                 last_node = self.depot
+                route_distance = 0.0
+                visited.clear()
 
-                # Recalculate travel details from the depot to the current customer.
-                travel_time = self.euclidean_distance(last_node, customer)
+                # Recalculate travel details from the depot to the chosen node.
+                travel_time = self.euclidean_distance(last_node, chosen_node)
                 arrival_time = current_vehicle.current_time + travel_time
-                if arrival_time < customer.early:
-                    arrival_time = customer.early
-
-                # If even after starting from the depot the customer cannot be served, mark as infeasible.
-                if (arrival_time > customer.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
-                    return float('inf'), []
+                if arrival_time < chosen_node.early:
+                    arrival_time = chosen_node.early
+                if (arrival_time > chosen_node.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
+                    return float('inf'), []  # Even after starting a new route, the node is infeasible.
             
-            # ------------------ Step 3: Add Customer to the Current Route ------------------
-            # Add the travel time from last node to the customer.
+            # --- Accept the Customer (via chosen_node) ---
             route_distance += travel_time
-            current_route.append(customer)
-            # Update the vehicle's current time (arrival plus service time at the customer).
-            current_vehicle.current_time = arrival_time + customer.service
-            # Add the customer's demand to the vehicle's load.
+            current_route.append(chosen_node)
+            current_vehicle.current_time = arrival_time + chosen_node.service
             current_vehicle.load += customer.demand
+            visited.add(chosen_node.node_id)
+            last_node = chosen_node
 
-            # Set the current customer as the last node for the next iteration.
-            last_node = customer
-
-        # After visiting all customers, finish the last route by returning to the depot.
+        # --- Step 4: Finalize the Last Route ---
         return_to_depot = self.euclidean_distance(last_node, self.depot)
         route_distance += return_to_depot
         current_route.append(self.depot)
         total_distance += route_distance
         routes.append(current_route)
 
-        # ------------------ Step 4: Return the Objective Value and Routes ------------------
         return total_distance, routes
     
     def route_evaluate(self, routes: List[List[Node]]) -> float:
@@ -467,32 +406,8 @@ class Problem:
             total_distance += route_distance
 
         return total_distance
-
-    def random_route(self) -> list[Node]:
-        """
-        Generate a random route that includes all customers in a random order,
-        with the depot (node with _id 0) at the start and at the end.
-
-        Returns:
-            route (list[Node]): A list of Node objects representing the route.
-                                The first and last nodes are the depot.
-        """
-        # Start the route with the depot.
-        route = [self.depot]
-        
-        # Create a copy of the customers list and shuffle it.
-        customers_copy = self.customers.copy()
-        random.shuffle(customers_copy)
-        
-        # Append the randomly ordered customers.
-        route.extend(customers_copy)
-        
-        # End the route with the depot.
-        route.append(self.depot)
-        
-        return route
     
-    def _locker_assignment(self, customer: Customer, explore=True) -> tuple[Node, Customer]:
+    def _locker_assignment(self, customer: Customer, explore=True, p=0.5) -> tuple[Node, Customer]:
         """
         Assign a customer to a parcel locker station based on the customer's type.
         For type 1 customers, the assigned node is the customer itself.
@@ -513,7 +428,7 @@ class Problem:
             chosen_node = customer.assigned_locker
         elif customer.locker_delivery is None:
             if customer.customer_type == 3 or explore:
-                if random.random() < 0.5:
+                if random.random() < p:
                     chosen_node = customer.assigned_locker
                     customer.locker_delivery = True
                 else:
@@ -604,10 +519,9 @@ class Problem:
         return total_distance, routes
       
 class Solver:
-    def __init__(self, objective_function=None, num_iterations=None, search_space=None):
+    def __init__(self, objective_function=None, num_iterations=None):
         self.objective_function = objective_function
         self.num_iterations = num_iterations
-        self.search_space = search_space
         self.global_best_position = None
         self.global_best_fitness = float('inf')
         self.fitness_history = []
@@ -711,11 +625,10 @@ if __name__ == "__main__":
     instance = Problem()
     instance.load_data("data/25/C101_co_25.txt")
 
-    initial_solution = instance.initialize_solution(0.5)
-    print("Initial solution:")
-    print(initial_solution[0])
-    print([node.node_id for node in initial_solution[1]])
-    cost, routes = instance.permu2route(initial_solution[0])
-    print("Initial cost:", cost)
+    initial_position = instance.initialize_position(p=0.5)
+    print(len(initial_position))
+    print("Initial Position: ", initial_position)
+    cost, routes = instance.position2route(initial_position)
+    print("Initial Cost: ", cost)
     print_routes(routes)
-
+    
