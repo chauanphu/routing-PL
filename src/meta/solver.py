@@ -27,7 +27,8 @@ class Customer(Node):
     """
     demand: float
     customer_type: int
-    assigned_locker: int | None = None
+    assigned_locker: Node | None = None
+    locker_delivery: bool | None = None
 
 class Vehicle(BaseModel):
     """
@@ -39,6 +40,7 @@ class Vehicle(BaseModel):
     capacity: float
     load: float
     current_time: float
+    visited: list[int] = []
 
     # Ensuring that the vehicle load is not greater than the vehicle capacity
     def __init__(self, **data):
@@ -108,7 +110,7 @@ class Problem:
             for i in range(self.num_customers):
                 for j, assignment in enumerate(map(int, f.readline().split())):
                     if assignment:
-                        self.customers[i].assigned_locker = j + 1
+                        self.customers[i].assigned_locker = self.lockers[j]
                         break
 
     @staticmethod
@@ -143,11 +145,17 @@ class Problem:
         for customer in sorted_customers:
             if customer.customer_type == 1:
                 chosen_node = customer
-            elif customer.customer_type in (2, 3):
-                chosen_node = self.select_nearest_locker(customer)
-                # Optionally, if no locker is found, fall back to home delivery.
-                if chosen_node is None:
+                customer.locker_delivery = False
+            elif customer.customer_type == 2:
+                chosen_node = customer.assigned_locker
+                customer.locker_delivery = True
+            elif customer.customer_type == 3:
+                if random.random() < p:
+                    chosen_node = customer.assigned_locker
+                    customer.locker_delivery = True
+                else:
                     chosen_node = customer
+                    customer.locker_delivery = False
             else:
                 chosen_node = customer
             assignment_list.append((customer, chosen_node))
@@ -483,8 +491,41 @@ class Problem:
         route.append(self.depot)
         
         return route
+    
+    def _locker_assignment(self, customer: Customer, explore=True) -> tuple[Node, Customer]:
+        """
+        Assign a customer to a parcel locker station based on the customer's type.
+        For type 1 customers, the assigned node is the customer itself.
+        For type 2 and type 3 customers, the assigned node is the nearest parcel locker station.
+        
+        Parameters:
+            customer (Customer): The customer object to assign to a parcel locker.
+        
+        Returns:
+            assigned_node (Node): The assigned parcel locker station.
+        """
+        if customer.customer_type == 1:
+            customer.locker_delivery = False
+            chosen_node = customer
+        elif customer.customer_type == 2:
+            customer.assigned_locker
+            customer.locker_delivery = True
+            chosen_node = customer.assigned_locker
+        elif customer.locker_delivery is None:
+            if customer.customer_type == 3 or explore:
+                if random.random() < 0.5:
+                    chosen_node = customer.assigned_locker
+                    customer.locker_delivery = True
+                else:
+                    chosen_node = customer
+                    customer.locker_delivery = False
+            else:
+                chosen_node = customer
+        else:
+            chosen_node = customer
+        return chosen_node, customer
 
-    def permu2route(self, permutation: list[Node | Customer]) -> tuple[float, list[list[Node]]]:
+    def permu2route(self, permutation: list[Node | Customer], explore=False) -> tuple[float, list[list[Node]]]:
         routes = []
         total_distance = 0.0
 
@@ -495,7 +536,7 @@ class Problem:
         current_vehicle = Vehicle(v_id=vehicle_index, capacity=self.vehicle_capacity, load=0.0, current_time=0.0)
         last_node = self.depot
         route_distance = 0.0
-
+        visited: set[int] = set()
         # Create a lookup dictionary for customers based on their node_id.
         customer_dict = {cust.node_id: cust for cust in self.customers}
 
@@ -507,26 +548,17 @@ class Problem:
                 continue
 
             # --- Locker Assignment ---
-            # For type 1, the visited node is the customer itself.
-            # For type 2 and type 3, assign the customer to a parcel locker station.
-            if customer.customer_type == 1:
-                chosen_node = customer
-            elif customer.customer_type in (2, 3):
-                chosen_node = self.select_nearest_locker(last_node)
-                # Fallback to home-delivery if no locker is feasible.
-                if chosen_node is None:
-                    chosen_node = customer
-            else:
-                chosen_node = customer
+            chosen_node, customer = self._locker_assignment(customer, explore)
 
             # --- Feasibility Check ---
             travel_time = self.euclidean_distance(last_node, chosen_node)
             arrival_time = current_vehicle.current_time + travel_time
             if arrival_time < chosen_node.early:
                 arrival_time = chosen_node.early
-
+            # If a locker station is visited more than once (not consecutive), skip it.
+            duplicate_lockers = (chosen_node.node_id in visited) and (chosen_node.node_id != self.depot.node_id) and (chosen_node.node_id != last_node.node_id)
             # Check time window and capacity feasibility.
-            if (arrival_time > chosen_node.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity):
+            if (arrival_time > chosen_node.late) or (current_vehicle.load + customer.demand > current_vehicle.capacity) or duplicate_lockers:
                 # Terminate the current route: return to depot.
                 return_to_depot = self.euclidean_distance(last_node, self.depot)
                 route_distance += return_to_depot
@@ -543,6 +575,7 @@ class Problem:
                 current_route = [self.depot]
                 last_node = self.depot
                 route_distance = 0.0
+                visited.clear()
 
                 # Recalculate travel details from depot to the chosen node.
                 travel_time = self.euclidean_distance(last_node, chosen_node)
@@ -558,6 +591,7 @@ class Problem:
             # Update vehicle state: add service time and customer demand.
             current_vehicle.current_time = arrival_time + chosen_node.service
             current_vehicle.load += customer.demand
+            visited.add(chosen_node.node_id)
             last_node = chosen_node
 
         # Finalize the last route: return to depot.
@@ -684,3 +718,4 @@ if __name__ == "__main__":
     cost, routes = instance.permu2route(initial_solution[0])
     print("Initial cost:", cost)
     print_routes(routes)
+
