@@ -8,7 +8,7 @@ instance.load_data("data/25/C101_co_25.txt")
 
 start_time = time.time()
 # Load the solver
-gwo = GWO(problem=instance, num_wolves=1000, num_iterations=100, local_search_iterations=None)
+gwo = GWO(problem=instance, num_wolves=500, num_iterations=300, local_search_iterations=None)
 
 gwo.optimize()
 routes: list[list[Node]]

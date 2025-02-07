@@ -440,7 +440,7 @@ class Problem:
             chosen_node = customer
         return chosen_node, customer
 
-    def permu2route(self, permutation: list[Node | Customer], explore=False) -> tuple[float, list[list[Node]]]:
+    def permu2route(self, permutation: list[int], explore=False) -> tuple[float, list[list[Node]]]:
         routes = []
         total_distance = 0.0
 
@@ -517,7 +517,119 @@ class Problem:
         routes.append(current_route)
 
         return total_distance, routes
-      
+
+    def node2routes(self, permutation: list[Node]) -> tuple[float, list[list[Node]]]:
+        """
+        Evaluate a permutation of node IDs (integers) that includes both customer and locker nodes
+        and convert it into feasible routes. The permutation is expected to include the depot
+        (node with id 0) as the first and last elements.
+
+        Parameters:
+            permutation (list[int]): A list of node IDs representing the visiting order.
+        
+        Returns:
+            tuple: (total_distance, routes)
+                total_distance (float): The sum of the travel distances for all routes. If any route is
+                                        infeasible, returns float('inf').
+                routes (list[list[Node]]): A list of routes, where each route is a list of Node objects
+                                        (starting and ending with the depot).
+        """
+        routes = []
+        total_distance = 0.0
+
+        # Initialize the first route starting at the depot.
+        current_route = [self.depot]
+        vehicle_index = 0
+        current_vehicle = Vehicle(
+            v_id=vehicle_index, 
+            capacity=self.vehicle_capacity, 
+            load=0.0, 
+            current_time=0.0
+        )
+        last_node = self.depot
+        route_distance = 0.0
+        visited: set[int] = set()
+
+        # Build a lookup dictionary for all nodes by their node_id.
+        node_dict = {}
+        node_dict[self.depot.node_id] = self.depot
+        for cust in self.customers:
+            node_dict[cust.node_id] = cust
+        for locker in self.lockers:
+            node_dict[locker.node_id] = locker
+
+        # Process each node ID from the permutation, skipping the first and last (depot markers)
+        for nid in permutation[1:-1]:
+            node: Node = node_dict.get(nid.node_id)
+            if node is None:
+                # If the node ID is not found, skip it.
+                continue
+
+            # --- Feasibility Check ---
+            travel_time = self.euclidean_distance(last_node, node)
+            arrival_time = current_vehicle.current_time + travel_time
+            if arrival_time < node.early:
+                arrival_time = node.early
+
+            # Check for duplicate locker visits (if the same locker is visited non-consecutively).
+            duplicate_lockers = (
+                (node.node_id in visited) and 
+                (node.node_id != self.depot.node_id) and 
+                (node.node_id != last_node.node_id)
+            )
+            # For customer nodes, get the demand; for lockers or depot, assume zero demand.
+            node_demand = node.demand if hasattr(node, "demand") else 0
+
+            if (arrival_time > node.late) or (current_vehicle.load + node_demand > current_vehicle.capacity) or duplicate_lockers:
+                # Terminate the current route by returning to the depot.
+                return_to_depot = self.euclidean_distance(last_node, self.depot)
+                route_distance += return_to_depot
+                current_route.append(self.depot)
+                total_distance += route_distance
+                routes.append(current_route)
+
+                # Switch to the next vehicle.
+                vehicle_index += 1
+                if vehicle_index >= self.num_vehicles:
+                    # If no more vehicles are available, return an infeasible penalty.
+                    return float('inf'), []
+                current_vehicle = Vehicle(
+                    v_id=vehicle_index, 
+                    capacity=self.vehicle_capacity, 
+                    load=0.0, 
+                    current_time=0.0
+                )
+                # Reset route details.
+                current_route = [self.depot]
+                last_node = self.depot
+                route_distance = 0.0
+                visited.clear()
+
+                # Recalculate travel details from the new route start (depot) to the current node.
+                travel_time = self.euclidean_distance(last_node, node)
+                arrival_time = current_vehicle.current_time + travel_time
+                if arrival_time < node.early:
+                    arrival_time = node.early
+                if (arrival_time > node.late) or (current_vehicle.load + node_demand > current_vehicle.capacity):
+                    return float('inf'), []
+
+            # --- Accept the Node ---
+            route_distance += travel_time
+            current_route.append(node)
+            current_vehicle.current_time = arrival_time + node.service
+            current_vehicle.load += node_demand
+            visited.add(node.node_id)
+            last_node = node
+
+        # Finalize the last route by returning to the depot.
+        return_to_depot = self.euclidean_distance(last_node, self.depot)
+        route_distance += return_to_depot
+        current_route.append(self.depot)
+        total_distance += route_distance
+        routes.append(current_route)
+
+        return total_distance, routes
+
 class Solver:
     def __init__(self, objective_function=None, num_iterations=None):
         self.objective_function = objective_function
