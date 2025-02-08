@@ -65,7 +65,7 @@ class AntColonyOptimization(Solver):
                     self.eta[i][j] = 1.0 / d if d != 0 else 1e6
 
         self.global_best_fitness = float('inf')
-        self.best_permutation = None  # Will be a list of Node objects.
+        self.best_solution = None  # Will be a list of Node objects.
         self.global_best_routes = None
         self.fitness_history = []
 
@@ -161,10 +161,10 @@ class AntColonyOptimization(Solver):
                 self.pheromones[b][a] += deposit
 
         # Optional: Elitist update for the best solution found so far.
-        if self.best_permutation is not None:
+        if self.best_solution is not None:
             deposit = self.Q / (self.global_best_fitness if self.global_best_fitness > 0 else 1e-8)
             indices = []
-            for node in self.best_permutation:
+            for node in self.best_solution:
                 if node.node_id == self.problem.depot.node_id:
                     indices.append(0)
                 else:
@@ -185,36 +185,44 @@ class AntColonyOptimization(Solver):
             best_routes: The routes corresponding to the best route.
         """
         for iteration in range(self.num_iterations):
-            all_solutions = []
+            ## 1. Apply seeding solution
+            initial_solution = self.problem.initialize_solution(p=0.1)[1]
+            initial_fitness, iniital_routes = self.problem.node2routes(initial_solution)
+            all_solutions = [(initial_solution, initial_fitness)]
+            if initial_fitness < self.global_best_fitness:
+                    self.global_best_fitness = initial_fitness
+                    self.best_solution = initial_solution
+                    self.global_best_routes = iniital_routes
+            ## 2. Construct solutions for each ant.
             for ant in range(self.num_ants):
-                solution = self.construct_solution()
+                solution: list[Node] = self.construct_solution()
                 # Evaluate the solution using the problem's evaluation method.
                 fitness, routes = self.problem.node2routes(solution)
                 all_solutions.append((solution, fitness))
                 # Update global best if necessary.
                 if fitness < self.global_best_fitness:
                     self.global_best_fitness = fitness
-                    self.best_permutation = solution
+                    self.best_solution = solution
                     self.global_best_routes = routes
             self.update_pheromones(all_solutions)
             self.fitness_history.append(self.global_best_fitness)
             if verbose:
                 print(f"Iteration {iteration + 1}: Best Fitness = {self.global_best_fitness}")
-        return self.best_permutation, self.global_best_fitness, self.global_best_routes
+        return self.best_solution, self.global_best_fitness, self.global_best_routes
 
 if __name__ == '__main__':
     import time
     from solver import Node, Problem, print_routes
     # Create a problem instance
     instance = Problem()
-    instance.load_data("data/25/C101_co_25.txt")
+    instance.load_data("data/100/C102_co_100.txt")
 
     start_time = time.time()
     # Load the solver
-    aco = AntColonyOptimization(problem=instance, num_ants=500, num_iterations=100)
+    aco = AntColonyOptimization(problem=instance, num_ants=1000, num_iterations=100)
     aco.optimize()
     print("Distance: ", aco.global_best_fitness)
-    print([node.node_id for node in aco.best_permutation])
+    print([node.node_id for node in aco.best_solution])
     print_routes(aco.global_best_routes)
     print("Elapsed time (s):", time.time() - start_time)
     aco.plot_fitness_history()

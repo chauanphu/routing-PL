@@ -89,8 +89,8 @@ class SimulatedAnnealing(Solver):
         """
         # Generate an initial solution.
         # 1. Generate a random solution.
-        current_solution = self.problem.initialize_solution(p=0.5)[0]
-        current_cost, current_routes = self.problem.node2route(current_solution, explore=True)
+        current_solution = self.problem.initialize_solution(p=0.1)[0]
+        current_cost, current_routes = self.problem.permu2route(current_solution, explore=True)
         # 2. Initialize best solution with the random solution.
         best_solution = current_solution
         best_cost = current_cost
@@ -108,7 +108,7 @@ class SimulatedAnnealing(Solver):
             for _ in range(self.iterations_per_temp):
                     # Generate a neighboring solution.
                 candidate_solution = self.neighbor(current_solution)
-                candidate_cost, candidate_routes = self.problem.node2route(candidate_solution, explore=True)
+                candidate_cost, candidate_routes = self.problem.permu2route(candidate_solution, explore=True, p=0.1)
                 delta = candidate_cost - current_cost
                 
                 # Accept the candidate if it's better, or with a probability if worse.
@@ -141,11 +141,11 @@ class SimulatedAnnealing(Solver):
 if __name__ == "__main__":
     # Assuming you have already created and loaded your Problem instance.
     problem = Problem()
-    problem.load_data("data/25/C101_co_25.txt")  # Make sure your data file is correctly formatted.
+    problem.load_data("data/100/C102_co_100.txt")  # Make sure your data file is correctly formatted.
     
     # Create an instance of the Simulated Annealing optimizer.
-    sa = SimulatedAnnealing(problem, init_temperature=10.0, cooling_rate=0.97, beta=1.0,
-                            min_temperature=0.1, iterations_per_temp=1000, max_iters=200, non_improvement=50)
+    sa = SimulatedAnnealing(problem, init_temperature=30.0, cooling_rate=0.99, beta=1.0,
+                            min_temperature=0.05, iterations_per_temp=1000, max_iters=200, non_improvement=50)
     
     # Run the optimization.
     sa.optimize()
