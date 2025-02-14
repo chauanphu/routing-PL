@@ -1,6 +1,6 @@
 import math
 import time
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Tuple
 import numpy as np
 from pydantic import BaseModel
 from matplotlib import pyplot as plt
@@ -67,6 +67,7 @@ class Problem:
     num_lockers: int
     num_customers: int
     vehicle_capacity: int
+    locker_cache = {}
 
     def load_data(self, path: str):
         """
@@ -84,6 +85,7 @@ class Problem:
         - num_lockers X <Locker'x coordinate>\t<Locker's y coordinate>\t<Locker's early time>\t<Locker's late time>\t<Locker's service time>\t<Locker type = 4>
         - num_customers X <Binary encoded locker assignment for each customer>. Ex: 0 1 => customer 1 is assigned to locker 2
         """
+        print("Loading data from", path)
         with open(path, 'r') as f:
             # Read the first line to get the number of customers and lockers
             self.num_customers, self.num_lockers = map(int, f.readline().split())
@@ -112,66 +114,12 @@ class Problem:
                     if assignment:
                         self.customers[i].assigned_locker = self.lockers[j]
                         break
+        print("Data loaded successfully")
 
     @staticmethod
     def euclidean_distance(n1: Node, n2: Node) -> float:
         """Helper function to calculate Euclidean distance between two nodes."""
         return math.hypot(n1.x - n2.x, n1.y - n2.y)
-
-    def select_nearest_locker(
-        self, last_node: 'Node'
-    ) -> Union['Node', None]:
-        """
-        From the available parcel lockers, select the one that is closest to the current
-        location (last_node) and can be feasibly visited (i.e. its time window is met)
-        from the current_vehicle's state.
-        """
-        best_locker = None
-        best_distance = float('inf')
-        for locker in self.lockers:
-            travel_time = self.euclidean_distance(last_node, locker)
-            if travel_time < best_distance:
-                best_distance = travel_time
-                best_locker = locker
-        return best_locker
-
-    def initialize_solution(self, p: float) -> Tuple[List[Any], float]:
-        # Copy of customers to be assigned.
-        sorted_customers = sorted(self.customers, key=lambda cust: cust.node_id)
-        # For each customer, assign a delivery node based on type.
-        # For type 1, assign the customer itself.
-        # For type 2 and type 3, assign the selected (nearest) parcel locker station.
-        assignment_list = []
-        for customer in sorted_customers:
-            chosen_node, chosen_node = self._locker_assignment(customer, explore=False, p=p)
-            assignment_list.append((customer, chosen_node))
-        
-        # --- Step 2: Nearest-Neighbor Ordering ---
-        # Initialize the two-row representation.
-        first_row = [0]             # Row 0: depot marker at the beginning.
-        second_row = [self.depot]     # Row 1: actual visited nodes, starting with depot.
-        current_node = self.depot
-
-        # While there remain unassigned customers, select the one whose assigned node
-        # is closest (in Euclidean distance) to the current node.
-        while assignment_list:
-            candidate_tuple = min(
-                assignment_list,
-                key=lambda tup: self.euclidean_distance(current_node, tup[1])
-            )
-            customer, chosen_node = candidate_tuple
-            first_row.append(customer.node_id)
-            second_row.append(chosen_node)
-            current_node = chosen_node
-            assignment_list.remove(candidate_tuple)
-        
-        # Terminate the route by appending the depot at the end.
-        first_row.append(0)
-        second_row.append(self.depot)
-
-        solution = [first_row, second_row]
-        
-        return solution
     
     def initialize_position(self, p: float) -> list[float]:
         """
@@ -225,6 +173,42 @@ class Problem:
     
         return positions
 
+    def initialize_solution(self, p: float) -> Tuple[List[int], List[Node]]:
+        # Copy of customers to be assigned.
+        sorted_customers = sorted(self.customers, key=lambda cust: cust.node_id)
+        # For each customer, assign a delivery node based on type.
+        # For type 1, assign the customer itself.
+        # For type 2 and type 3, assign the selected (nearest) parcel locker station.
+        assignment_list = []
+        for customer in sorted_customers:
+            chosen_node, _ = self._locker_assignment(customer, explore=True, p=p)
+            assignment_list.append((customer, chosen_node))
+        
+        # --- Step 2: Nearest-Neighbor Ordering ---
+        # Initialize the two-row representation.
+        first_row = [0]             # Row 0: depot marker at the beginning.
+        second_row = [self.depot]     # Row 1: actual visited nodes, starting with depot.
+        current_node = self.depot
+
+        # While there remain unassigned customers, select the one whose assigned node
+        # is closest (in Euclidean distance) to the current node.
+        while assignment_list:
+            candidate_tuple = min(
+                assignment_list,
+                key=lambda tup: self.euclidean_distance(current_node, tup[1])
+            )
+            customer, chosen_node = candidate_tuple
+            first_row.append(customer.node_id)
+            second_row.append(chosen_node)
+            current_node = chosen_node
+            assignment_list.remove(candidate_tuple)
+        
+        # Terminate the route by appending the depot at the end.
+        first_row.append(0)
+        second_row.append(self.depot)
+        
+        return first_row, second_row
+    
     def get_search_space(self) -> list[tuple[float, float]]:
         """
         Get the search space for the problem.
@@ -340,74 +324,9 @@ class Problem:
         routes.append(current_route)
 
         return total_distance, routes
-    
-    def route_evaluate(self, routes: List[List[Node]]) -> float:
-        """
-        Evaluate a given set of routes (each route is a list of Node objects)
-        by computing the total travel distance while checking feasibility in terms of
-        time windows and vehicle capacity.
-        
-        Feasibility checks:
-          - The arrival time at each node must lie within its [early, late] time window.
-          - The cumulative customer demand along each route must not exceed the vehicle capacity.
-        
-        Each route is assumed to start and end at the depot. If not, the depot is added automatically.
-        
-        Parameters:
-            routes (List[List[Node]]): A list of routes, where each route is a list of Node objects.
-            
-        Returns:
-            total_distance (float): The total travel distance for all routes. If any route is infeasible,
-                                      returns float('inf') as a penalty.
-        """
-        total_distance = 0.0
 
-        # Evaluate each route independently.
-        for route in routes:
-            # Ensure the route starts and ends at the depot.
-            if not route or route[0].node_id != self.depot.node_id:
-                route = [self.depot] + route
-            if route[-1].node_id != self.depot.node_id:
-                route = route + [self.depot]
 
-            # Initialize route variables.
-            route_distance = 0.0
-            current_time = 0.0  # Vehicle starts at time 0.0
-            load = 0.0         # Vehicle load starts at 0.0
-
-            # Process each leg of the route.
-            for i in range(1, len(route)):
-                prev_node = route[i - 1]
-                current_node = route[i]
-
-                # Calculate travel time/distance.
-                travel_time = self.euclidean_distance(prev_node, current_node)
-                route_distance += travel_time
-
-                # Calculate arrival time at the current node.
-                arrival_time = current_time + travel_time
-                # Wait until the node's early time if arriving too early.
-                if arrival_time < current_node.early:
-                    arrival_time = current_node.early
-                # If arrival is later than the node's late time, route is infeasible.
-                if arrival_time > current_node.late:
-                    return float('inf')
-
-                # Update current time to include service time.
-                current_time = arrival_time + current_node.service
-
-                # If the current node is a customer, update the load.
-                # (We assume that only Customer nodes have the attribute "demand".)
-                if hasattr(current_node, "demand"):
-                    load += current_node.demand
-                    if load > self.vehicle_capacity:
-                        return float('inf')
-            
-            total_distance += route_distance
-
-        return total_distance
-    
-    def _locker_assignment(self, customer: Customer, explore=True, p=0.5) -> tuple[Node, Customer]:
+    def _locker_assignment(self, customer: Customer, explore=False, p=0.5) -> tuple[Node, Customer]:
         """
         Assign a customer to a parcel locker station based on the customer's type.
         For type 1 customers, the assigned node is the customer itself.
@@ -426,21 +345,24 @@ class Problem:
             customer.assigned_locker
             customer.locker_delivery = True
             chosen_node = customer.assigned_locker
-        elif customer.locker_delivery is None:
-            if customer.customer_type == 3 or explore:
-                if random.random() < p:
-                    chosen_node = customer.assigned_locker
-                    customer.locker_delivery = True
-                else:
-                    chosen_node = customer
-                    customer.locker_delivery = False
-            else:
+        elif customer.customer_type == 3:
+            if not explore:
+                chosen_node = self.locker_cache.get(customer.node_id)
+                if chosen_node is not None:
+                    return chosen_node, customer
+            if random.random() < p: # If r < p then home delivery
                 chosen_node = customer
-        else:
+                customer.locker_delivery = False
+                self.locker_cache[customer.node_id] = customer
+            else:
+                chosen_node = customer.assigned_locker
+                customer.locker_delivery = True
+                self.locker_cache[customer.node_id] = customer.assigned_locker
+        else: # In case 
             chosen_node = customer
         return chosen_node, customer
 
-    def permu2route(self, permutation: list[int], explore=False) -> tuple[float, list[list[Node]]]:
+    def permu2route(self, permutation: list[int]) -> tuple[float, list[list[Node]]]:
         routes = []
         total_distance = 0.0
 
@@ -463,7 +385,7 @@ class Problem:
                 continue
 
             # --- Locker Assignment ---
-            chosen_node, customer = self._locker_assignment(customer, explore)
+            chosen_node, customer = self._locker_assignment(customer, False)
 
             # --- Feasibility Check ---
             travel_time = self.euclidean_distance(last_node, chosen_node)
@@ -653,33 +575,8 @@ class Solver:
         plt.ylabel('Best Fitness')
         plt.grid(True)
         plt.show()
-
-    def plot_search_space(self):
-        """
-        Plots the contour of the 2D search space along with the best solution.
-        """
-        if len(self.search_space) != 2:
-            print("Search space must be 2D for visualization.")
-            return
-
-        x = np.linspace(self.search_space[0][0], self.search_space[0][1], 100)
-        y = np.linspace(self.search_space[1][0], self.search_space[1][1], 100)
-        X, Y = np.meshgrid(x, y)
-        
-        # Compute the objective function value for each (x, y)
-        Z = np.array([[self.objective_function([xi, yi]) for xi, yi in zip(x_row, y_row)] 
-                      for x_row, y_row in zip(X, Y)])
-        
-        plt.figure(figsize=(10, 6))
-        plt.contourf(X, Y, Z, levels=50, cmap='viridis')
-        plt.colorbar(label='Fitness')
-        if self.global_best_position:
-            plt.scatter(self.global_best_position[0], self.global_best_position[1], color='red', label='Best Solution')
-        plt.title('Search Space and Best Solution')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.legend()
-        plt.show()
+        # Save the plot to a file
+        plt.savefig("output/fitness_history.png")
 
     def plot_routes(self, routes: list[list[Node]] = None) -> None:
         """
@@ -716,6 +613,8 @@ class Solver:
         plt.legend()
         plt.grid(True)
         plt.show()
+        # Save the plot to a file
+        plt.savefig("output/routes.png")
 
 class Experiment:
     def __init__(self, instance, solvers, num_experiments=50):
@@ -774,10 +673,10 @@ if __name__ == "__main__":
     instance = Problem()
     instance.load_data("data/25/C101_co_25.txt")
 
-    initial_position = instance.initialize_position(p=0.5)
-    print(len(initial_position))
-    print("Initial Position: ", initial_position)
-    cost, routes = instance.position2route(initial_position)
-    print("Initial Cost: ", cost)
+    initial_solution = instance.initialize_solution(0.5)
+    print("First row:", [node for node in initial_solution[0]])
+    print("Second row:", [node.node_id for node in initial_solution[1]])
+    cost, routes = instance.permu2route(initial_solution[0])
+    print("Cost:", cost)
     print_routes(routes)
     
