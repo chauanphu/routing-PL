@@ -402,11 +402,11 @@ if __name__ == '__main__':
     from solver import Node, Problem, print_routes
     # Create a problem instance
     instance = Problem()
-    instance.load_data("data/100/C101_co_100.txt")
+    instance.load_data("data/25/C101_co_25.txt")
 
     start_time = time.time()
     # Load the solver
-    aco = AsyncMulticolonyACO(instance, num_colonies=4, num_iterations=100, num_ants=1000, sync_interval=10,
+    aco = AntColonyOptimization(instance, num_iterations=50, num_ants=1000, batch_size=100,
                                   alpha=1.0, beta=2.0, evaporation_rate=0.1, Q=1.0)
     aco.optimize()
     print("Elapsed time (s):", time.time() - start_time)
