@@ -3,6 +3,7 @@ from concurrent.futures import ProcessPoolExecutor
 import math
 import random
 import numpy as np
+import matplotlib.pyplot as plt  # <-- new import
 
 if __name__ == "__main__":
     from solver import Problem, Solver
@@ -11,6 +12,16 @@ else:
 
 def euclidean_distance(p1, p2):
     return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
+
+def export_pheromones_heatmap(pheromones, filename="pheromones_heatmap.png"):
+    # Average over delivery modes to get a 2D matrix.
+    heatmap = np.mean(pheromones, axis=2)
+    plt.figure(figsize=(8,6))
+    plt.imshow(heatmap, cmap="hot", interpolation="nearest")
+    plt.colorbar()
+    plt.title("Pheromone Heat Map")
+    plt.savefig(filename)
+    plt.close()
 
 class SACO(Solver):
     def __init__(self, problem: Problem, num_ants=20, num_iterations=100,
@@ -525,6 +536,7 @@ class MultiColony(Solver):
                 global_pheromones=self.global_pheromones
             )
         )
+        # Export pheromone matrix as heat map after run completion.
         self.global_best_fitness = best_fitness
         self.fitness_history.append(best_fitness)
         if verbose:
@@ -534,7 +546,7 @@ class MultiColony(Solver):
 
 if __name__ == '__main__':
     import time
-    from solver import Node, Problem, print_routes
+    from solver import Problem, print_routes
     # Create a problem instance
     instance = Problem()
     instance.load_data("data/25/C101_co_25.txt")
@@ -542,7 +554,8 @@ if __name__ == '__main__':
     start_time = time.time()
     # Use PACO as example (SACO can be used similarly after modification)
     aco = PACO(instance, num_iterations=50, num_ants=1000, batch_size=100,
-               alpha=1.0, beta=2.0, evaporation_rate=0.1, Q=1.0)
+               alpha=2.5, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    export_pheromones_heatmap(aco.pheromones, "initial_pheromones.png")
     aco.optimize()
     print("Elapsed time (s):", time.time() - start_time)
     print("Distance: ", aco.global_best_fitness)
@@ -550,3 +563,4 @@ if __name__ == '__main__':
     print_routes(aco.global_best_routes)
     aco.plot_fitness_history()
     aco.plot_routes()
+    export_pheromones_heatmap(aco.pheromones, "pheromones_heatmap.png")
