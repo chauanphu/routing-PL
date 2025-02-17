@@ -1,6 +1,6 @@
 import math
 import time
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Optional
 import numpy as np
 from pydantic import BaseModel
 from matplotlib import pyplot as plt
@@ -27,8 +27,8 @@ class Customer(Node):
     """
     demand: float
     customer_type: int
-    assigned_locker: Node | None = None
-    locker_delivery: bool | None = None
+    assigned_locker: Optional[Node] = None  # changed union operator to Optional
+    locker_delivery: Optional[bool] = None    # changed union operator to Optional
 
 class Vehicle(BaseModel):
     """
@@ -679,4 +679,4 @@ if __name__ == "__main__":
     cost, routes = instance.permu2route(initial_solution[0])
     print("Cost:", cost)
     print_routes(routes)
-    
+
