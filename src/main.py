@@ -1,18 +1,22 @@
-import time
-from meta.solver import Node, Problem, print_routes
+from meta.solver import Problem, Experiment
+from meta.ACO import AntColonyOptimization as ClassicACO, SACO, PACO
+from meta.SA import SimulatedAnnealing as SA
 from meta.GreyWolf import GreyWolfOptimization as GWO
-from meta.PSO import ParticleSwarmOptimization as PSO
 # Create a problem instance
 instance = Problem()
-instance.load_data("data/25/C101_co_25.txt")
+instance.load_data("data/50/C101_co_50.txt")
 
-start_time = time.time()
-# Load the solver
-gwo = GWO(problem=instance, num_wolves=500, num_iterations=300, local_search_iterations=None)
+experiment = Experiment(
+    instance, 
+    solvers=[
+        (SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0), "SACO"),
+        (PACO(instance, num_ants=1000, batch_size=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0), "PACO"),
+    ],
+    num_experiments=4
+    )
 
-gwo.optimize()
-routes: list[list[Node]]
-print("Distance: ", gwo.global_best_fitness)
-print_routes(gwo.global_best_routes)
-gwo.plot_fitness_history()
-gwo.plot_routes()
+# Run the experiment
+experiment.run()
+
+# Export
+experiment.report()

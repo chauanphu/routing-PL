@@ -1,10 +1,11 @@
 import math
-import time
+import timeit
 from typing import Any, List, Tuple, Optional
 import numpy as np
 from pydantic import BaseModel
 from matplotlib import pyplot as plt
 import random
+import os
 
 class Node(BaseModel):
     """
@@ -618,6 +619,12 @@ class Solver:
 
 class Experiment:
     def __init__(self, instance, solvers, num_experiments=50):
+        """
+        Parameters:
+            instance: The problem instance.
+            solvers: A list of tuples (solver_instance, solver_name)
+            num_experiments: Number of runs per solver.
+        """
         self.instance = instance
         self.solvers: list[Solver] = []
         self.names = []
@@ -625,40 +632,102 @@ class Experiment:
             self.solvers.append(s)
             self.names.append(name)
         self.num_experiments = num_experiments
-        self.results: dict = None
+        self.results: dict = {}  # Will store results per solver
+
+        # Create output directory if it does not exist.
+        self.output_dir = "output/experiment"
+        os.makedirs(self.output_dir, exist_ok=True)
 
     def run(self):
+        """
+        Runs each solver num_experiments times on the same dataset.
+        Records the best fitness (distance) and execution time.
+        """
+        # Initialize results dictionary.
         results = {s: {
             "name": name,
             "fitness": [],
             "time": []
         } for s, name in zip(self.solvers, self.names)}
-        for _ in range(self.num_experiments):
-            print(f"Experiment {_ + 1}")
-            for s in self.solvers:
-                print("\t", results[s]["name"], end=": ")
-                start = time.time()
-                s.optimize(verbose=False)
-                end = time.time()
-                run_time = end - start
-                results[s]["fitness"].append(s.global_best_fitness)
-                results[s]["time"].append(run_time)
-                print(f"Done: Fitness = {s.global_best_fitness}, Time = {run_time:.2f} sec")
+        
+        for exp in range(self.num_experiments):
+            print(f"Experiment {exp + 1}/{self.num_experiments}")
+            for solver in self.solvers.copy():
+                # Reset the solver's state before each run if needed.
+                solver.global_best_fitness = float('inf')
+                solver.global_best_position = None
+                solver.global_best_routes = []
+                solver.fitness_history = []
+
+                print(f"\tRunning solver: {results[solver]['name']}", end="... ")
+                run_time = timeit.timeit(lambda: solver.optimize(verbose=False), number=1)
+
+                results[solver]["fitness"].append(solver.global_best_fitness)
+                results[solver]["time"].append(run_time)
+                print(f"Done: Fitness = {solver.global_best_fitness:.2f}, Time = {run_time:.2f} sec")
+                del solver
         self.results = results
         return results
-    
+
     def report(self):
-        if self.results is None:
+        """
+        Prints the performance report and exports the plots for each solver.
+        The report includes the best distance, average distance, and standard deviation.
+        The plots are saved to the output/experiment folder.
+        """
+        if not self.results:
             print("No results to report. Run the experiments first.")
             return
-        
-        for s, r in self.results.items():
-            print(f"\nSolver: {r['name']}")
-            print(f"Mean Fitness: {np.mean(r['fitness'])}")
-            print(f"Std Fitness: {np.std(r['fitness'])}")
-            print(f"Mean Time: {np.mean(r['time'])}")
-            print(f"Std Time: {np.std(r['time'])}")
-            print("-"*20)
+
+        for solver in self.solvers:
+            r = self.results[solver]
+            solver_name = r["name"]
+            fitness_array = np.array(r["fitness"])
+            best_distance = fitness_array.min()
+            avg_distance = fitness_array.mean()
+            std_distance = fitness_array.std()
+
+            print(f"\nSolver: {solver_name}")
+            print(f"Best Distance: {best_distance:.2f}")
+            print(f"Average Distance: {avg_distance:.2f}")
+            print(f"Std Deviation: {std_distance:.2f}")
+            print("-" * 30)
+
+            # Export fitness history plot (if available)
+            if solver.fitness_history:
+                plt.figure(figsize=(10, 6))
+                plt.plot(range(1, len(solver.fitness_history) + 1), solver.fitness_history,
+                         marker='o', linestyle='-', color='b')
+                plt.title(f'Fitness History - {solver_name}')
+                plt.xlabel('Iteration')
+                plt.ylabel('Best Fitness')
+                plt.grid(True)
+                fitness_plot_path = os.path.join(self.output_dir, f"fitness_history_{solver_name}.png")
+                plt.savefig(fitness_plot_path)
+                plt.close()
+                print(f"Saved fitness history plot: {fitness_plot_path}")
+
+            # Export routes plot (if available)
+            if solver.global_best_routes:
+                plt.figure(figsize=(10, 8))
+                colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'orange']
+                for i, route in enumerate(solver.global_best_routes):
+                    xs = [node.x for node in route]
+                    ys = [node.y for node in route]
+                    color = colors[i % len(colors)]
+                    plt.plot(xs, ys, marker='o', linestyle='-', color=color, label=f"Route {i+1}")
+                    for node in route:
+                        plt.text(node.x, node.y, f"{node.node_id}", fontsize=9, color=color,
+                                 verticalalignment='bottom', horizontalalignment='right')
+                plt.title(f"Routes - {solver_name}")
+                plt.xlabel("X coordinate")
+                plt.ylabel("Y coordinate")
+                plt.legend()
+                plt.grid(True)
+                routes_plot_path = os.path.join(self.output_dir, f"routes_{solver_name}.png")
+                plt.savefig(routes_plot_path)
+                plt.close()
+                print(f"Saved routes plot: {routes_plot_path}")
 
 def print_routes(routes: list[list[Node]]):
     print("Number of routes: ", len(routes))

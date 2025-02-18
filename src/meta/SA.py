@@ -1,7 +1,10 @@
 import random
 import math
 import time
-from solver import Node, Problem, Solver, print_routes
+if __name__ == "__main__":
+    from solver import Problem, Solver, Node, print_routes
+else:
+    from meta.solver import Problem, Solver, Node, print_routes
 
 class SimulatedAnnealing(Solver):
     def __init__(self, problem: Problem, init_temperature: float = 1000.0, cooling_rate: float = 0.995, beta: float = 1.0,
@@ -102,7 +105,7 @@ class SimulatedAnnealing(Solver):
         iter_count = 0
         non_improvement_count = 0
         found_best = False
-        while self.T > self.min_temperature and iter_count < self.max_iters and non_improvement_count < self.non_improvement:
+        while self.T > self.min_temperature and non_improvement_count < self.non_improvement:
             iter_count += 1
             if verbose:
                 print(f"Iteraion: {iter_count}/{self.max_iters}:\tTemperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
