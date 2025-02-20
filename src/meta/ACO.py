@@ -1,8 +1,10 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import math
 import random
+import time
 import numpy as np
 import matplotlib.pyplot as plt
+from multiprocessing import shared_memory
 
 if __name__ == "__main__":
     from solver import Problem, Solver, Node, print_routes
@@ -392,19 +394,23 @@ class PACO(Solver):
         self.n = self.problem.num_customers
 
         # Initialize a single 3D pheromone matrix with dimensions (n+1) x (n+1) x 2.
-        self.pheromones = np.ones((self.n + 1, self.n + 1, 2))
+        pheromones = np.ones((self.n + 1, self.n + 1, 2))
         for j, customer in enumerate(self.problem.customers, start=1):
             if customer.customer_type == 1:
-                self.pheromones[:, j, 1] = 0.0
+                pheromones[:, j, 1] = 0.0
             elif customer.customer_type == 2:
-                self.pheromones[:, j, 0] = 0.0
-
+                pheromones[:, j, 0] = 0.0
+        # Create shared memory block for the pheromone matrix
+        self.pheromone_shm = shared_memory.SharedMemory(create=True, size=pheromones.nbytes)
+        # Create a NumPy array backed by shared memory
+        self.shared_pheromones = np.ndarray(pheromones.shape, dtype=pheromones.dtype, buffer=self.pheromone_shm.buf)
+        np.copyto(self.shared_pheromones, pheromones)
         self.global_best_fitness = float('inf')
         self.global_best_solution = None
         self.global_best_routes = None
         self.fitness_history = []
 
-    def construct_solution(self):
+    def construct_solution(self, shared_pheromones):
         """
         Constructs one ant's solution using the integrated 3D pheromone matrix.
         """
@@ -423,13 +429,13 @@ class PACO(Solver):
                     candidate_coord = (customer.x, customer.y) if d == 0 else (customer.assigned_locker.x, customer.assigned_locker.y)
                     distance = euclidean_distance(current_location, candidate_coord)
                     heuristic = 1.0 / distance if distance > 0 else 1e6
-                    tau = self.pheromones[prev_index, j, d]
+                    tau = shared_pheromones[prev_index, j, d]
                     value = (tau ** self.alpha) * (heuristic ** self.beta)
                     candidate_options.append((j, d, value, candidate_coord))
 
             total_value = sum(option[2] for option in candidate_options)
             probs = [option[2] / total_value for option in candidate_options] if total_value > 0 else [1 / len(candidate_options)] * len(candidate_options)
-            r = random.random()
+            r = np.random.random()
             cumulative = 0.0
             selected = None
             for (j, d, _, candidate_coord), prob in zip(candidate_options, probs):
@@ -439,7 +445,6 @@ class PACO(Solver):
                     break
             if selected is None:
                 selected = candidate_options[-1][0:2] + (candidate_options[-1][3],)
-
             j, d, candidate_coord = selected
             transitions.append((prev_index, j, d))
             final_route.append(self.problem.customers[j - 1] if d == 0 else self.problem.customers[j - 1].assigned_locker)
@@ -451,49 +456,96 @@ class PACO(Solver):
 
     def update_pheromones(self, solutions):
         """Updates the integrated 3D pheromone matrix based on the ant solutions."""
-        self.pheromones *= (1 - self.evaporation_rate)
+        self.shared_pheromones *= (1 - self.evaporation_rate)
         for transitions, fitness in solutions:
             deposit = self.Q / (fitness if fitness > 0 else 1e-8)
             for (i, j, d) in transitions:
-                self.pheromones[i, j, d] += deposit
+                self.shared_pheromones[i, j, d] += deposit
 
         for j, customer in enumerate(self.problem.customers, start=1):
             if customer.customer_type == 1:
-                self.pheromones[:, j, 1] = 0.0
+                self.shared_pheromones[:, j, 1] = 0.0
             elif customer.customer_type == 2:
-                self.pheromones[:, j, 0] = 0.0
+                self.shared_pheromones[:, j, 0] = 0.0
 
-    def single_ant_solution(self):
-        """Constructs and evaluates a single ant's solution."""
-        transitions, final_route = self.construct_solution()
-        fitness, routes = self.problem.node2routes(final_route)
-        return transitions, fitness, final_route, routes
+    # --- Bundle Multiple Ants in One Task ---
+    def multi_ant_solution(self, num_ants_in_task, pheromone_shm_name, shape, dtype):
+        # Attach to shared memory for pheromones
+        shm = shared_memory.SharedMemory(name=pheromone_shm_name)
+        shared_pheromones = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
+        results = []
+        for _ in range(num_ants_in_task):
+            worker_ant_start = time.time()
+            transitions, final_route = self.construct_solution(shared_pheromones)
+            # (Optionally record a mid-time if needed)
+            fitness, routes = self.problem.node2routes(final_route)
+            worker_ant_end = time.time()
+            ant_compute_time = worker_ant_end - worker_ant_start
+            # Append result with compute time for overhead estimation
+            results.append((transitions, fitness, final_route, routes, ant_compute_time))
+        shm.close()  # Detach from shared memory
+        return results
 
     def optimize(self, verbose=True):
-        """Executes the ACO optimization process using parallel processing."""
-        with ThreadPoolExecutor() as executor:
-            for iteration in range(self.num_iterations):
-                solutions = []
-                for i in range(0, self.num_ants, self.batch_size):
-                    futures = [executor.submit(self.single_ant_solution) for _ in range(self.batch_size)]
-                    batch_results = [future.result() for future in futures]
-                    solutions.extend(batch_results)
-                self.update_pheromones([(transitions, fitness) for (transitions, fitness, _, _) in solutions])
-                for (transitions, fitness, final_route, routes) in solutions:
-                    if fitness < self.global_best_fitness:
-                        self.global_best_fitness = fitness
-                        self.global_best_solution = final_route
-                        self.global_best_routes = routes
-                self.fitness_history.append(self.global_best_fitness)
-                if verbose:
-                    print(f"Iteration {iteration + 1}: Best Fitness = {self.global_best_fitness}")
+        pheromone_shape = self.shared_pheromones.shape
+        pheromone_dtype = self.shared_pheromones.dtype
+        try:
+            with ProcessPoolExecutor() as executor:
+                for iteration in range(self.num_iterations):
+                    iteration_start = time.time()
+                    futures = []
+                    submission_times = {}
+                    num_tasks = self.num_ants // self.batch_size
+                    for _ in range(num_tasks):
+                        submit_time = time.time()
+                        future = executor.submit(self.multi_ant_solution,
+                                                self.batch_size,
+                                                self.pheromone_shm.name,
+                                                pheromone_shape,
+                                                pheromone_dtype)
+                        futures.append(future)
+                        submission_times[future] = submit_time
+
+                    solutions = []
+                    overhead_times = []
+                    # Retrieve task results as they complete
+                    for future in as_completed(futures):
+                        master_end = time.time()
+                        round_trip_time = master_end - submission_times[future]
+                        task_results = future.result()  # List of ant results from one task
+                        total_worker_time = sum(result[4] for result in task_results)
+                        # Overhead is the difference between master round-trip and total worker compute time for this task
+                        overhead = round_trip_time - total_worker_time
+                        overhead_times.append(overhead)
+                        solutions.extend(task_results)
+                    self.update_pheromones([(transitions, fitness) for (transitions, fitness, _, _, _) in solutions])
+                    iteration_end = time.time()
+                    avg_overhead_per_task = sum(overhead_times) / len(overhead_times) if overhead_times else 0
+                    # Since each task processes self.batch_size ants, compute average overhead per ant:
+                    avg_overhead_per_ant = avg_overhead_per_task / self.batch_size
+                    # Update pheromones using the computed solutions (ignoring the worker time field)
+                    for (transitions, fitness, final_route, routes, _) in solutions:
+                        if fitness < self.global_best_fitness:
+                            self.global_best_fitness = fitness
+                            self.global_best_solution = final_route
+                            self.global_best_routes = routes
+                    self.fitness_history.append(self.global_best_fitness)
+                    if verbose:
+                        print(f"Iteration completed {iteration}/{self.num_iterations}\tBest Fitness = {self.global_best_fitness:.2f}\tTime: {iteration_end - iteration_start:.2f}")
+        finally:
+            self.cleanup()
         return self.global_best_solution, self.global_best_fitness, self.global_best_routes
+
+    # --- Cleanup Shared Memory ---
+    def cleanup(self):
+        self.pheromone_shm.close()
+        self.pheromone_shm.unlink()
 
 if __name__ == "__main__":
     instance = Problem()
-    instance.load_data("data/50/C101_co_50.txt")
-    aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
-    # aco = PACO(instance, num_ants=1000, batch_size=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    instance.load_data("data/100/C101_co_100.txt")
+    # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    aco = PACO(instance, num_ants=5000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
     import timeit
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
     print(f"Best Fitness: {aco.global_best_fitness}")
