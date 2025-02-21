@@ -15,12 +15,26 @@ def euclidean_distance(p1, p2):
     return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
 
 def export_pheromones_heatmap(pheromones, filename="pheromones_heatmap.png"):
-    # Average over delivery modes to get a 2D matrix.
-    heatmap = np.mean(pheromones, axis=2)
-    plt.figure(figsize=(8,6))
-    plt.imshow(heatmap, cmap="hot", interpolation="nearest")
-    plt.colorbar()
-    plt.title("Pheromone Heat Map")
+    """
+    Plots both layers of the 3D pheromone matrix as heatmaps.
+    
+    Args:
+        pheromones: 3D numpy array of shape (n+1, n+1, 2)
+        title_prefix: String to prepend to plot titles
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    # Plot direct delivery layer (mode 0)
+    im1 = ax1.imshow(pheromones[:, :, 0], cmap='hot', interpolation='nearest')
+    ax1.set_title(f"Home Delivery Pheromones")
+    plt.colorbar(im1, ax=ax1)
+    
+    # Plot locker delivery layer (mode 1)
+    im2 = ax2.imshow(pheromones[:, :, 1], cmap='hot', interpolation='nearest')
+    ax2.set_title(f"Locker Delivery Pheromones")
+    plt.colorbar(im2, ax=ax2)
+    
+    plt.tight_layout()
     plt.savefig(filename)
     plt.close()
 
@@ -541,12 +555,13 @@ class PACO(Solver):
         self.pheromone_shm.close()
         self.pheromone_shm.unlink()
 
-if __name__ == "__main__":
+def main_PACO():
     instance = Problem()
-    instance.load_data("data/100/C101_co_100.txt")
+    instance.load_data("data/25/C101_co_25.txt")
     # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
     aco = PACO(instance, num_ants=5000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
     import timeit
+    export_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
     print(f"Best Fitness: {aco.global_best_fitness}")
     print(f"Execution Time: {run_time:.2f} seconds")
@@ -554,4 +569,6 @@ if __name__ == "__main__":
     print_routes(aco.global_best_routes)
     aco.plot_fitness_history()
     aco.plot_routes()
-    
+
+if __name__ == "__main__":
+    main_PACO()
