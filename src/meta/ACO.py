@@ -258,11 +258,13 @@ class SACO(Solver):
         self.beta = beta
         self.evaporation_rate = evaporation_rate
         self.Q = Q
-
+        self.tau_min = 0.01 # Min-MAx not implemented
+        self.tau_max = 2.0 # Min-max not implemented
+        self.num_elitist = 10
         self.n = self.problem.num_customers
 
         # Initialize 3D pheromone matrix.
-        self.pheromones = np.ones((self.n + 1, self.n + 1, 2))
+        self.pheromones = np.full((self.n + 1, self.n + 1, 2), self.tau_max)
         for j, customer in enumerate(self.problem.customers, start=1):
             if customer.customer_type == 1:
                 self.pheromones[:, j, 1] = 0.0
@@ -333,25 +335,27 @@ class SACO(Solver):
         final_route.append(self.problem.depot)
         return transitions, final_route
 
-    def update_pheromones(self, solutions: list):
+    def update_pheromones(self, solutions):
         """
-        Updates 3D pheromones using the transitions from ant solutions.
-        Each solution is a tuple (transitions, fitness).
+        Updates the integrated 3D pheromone matrix based on ant solutions using both max–min and elitist strategies.
         """
-        # Evaporate pheromones.
+        # Evaporate pheromones
         self.pheromones *= (1 - self.evaporation_rate)
+        solutions = sorted(solutions, key=lambda x: x[1])
+        solutions = solutions[:self.num_elitist]  # Keep only the best solutions
+
+        # Standard deposit from each ant's solution
         for transitions, fitness in solutions:
             deposit = self.Q / (fitness if fitness > 0 else 1e-8)
             for (i, j, d) in transitions:
                 self.pheromones[i, j, d] += deposit
 
-        # Elitist update using best solution transitions.
-        if self.best_solution_transitions is not None:
-            deposit = self.Q / (self.global_best_fitness if self.global_best_fitness > 0 else 1e-8)
-            for (i, j, d) in self.best_solution_transitions:
-                self.pheromones[i, j, d] += deposit
+        # Max–min pheromone clamping:
+        # if self.global_best_fitness < float('inf'):
+        #     # Clamp the pheromone matrix to lie within [tau_min, tau_max]
+        #     self.pheromones[:] = np.clip(self.pheromones, self.tau_min, self.tau_max)
 
-        # Enforce fixed settings for customer types.
+        # Enforce restrictions on pheromone values for customer types
         for j, customer in enumerate(self.problem.customers, start=1):
             if customer.customer_type == 1:
                 self.pheromones[:, j, 1] = 0.0
@@ -380,7 +384,7 @@ class SACO(Solver):
         return self.best_solution, self.global_best_fitness, self.global_best_routes
 
 class PACO(Solver):
-    def __init__(self, problem: Problem, num_ants=1000, num_iterations=100, batch_size=100, alpha=1.0, beta=2.0, evaporation_rate=0.1, Q=1.0):
+    def __init__(self, problem: Problem, num_ants=1000, num_iterations=100, batch_size=100, alpha=1.0, beta=2.0, evaporation_rate=0.2, Q=1.0):
         """
         Initializes the ACO optimizer for the VRPPL problem using a 3D pheromone matrix and sets up key parameters for
         ant colony optimization with batch processing for parallel execution.
@@ -403,12 +407,14 @@ class PACO(Solver):
         self.beta = beta
         self.evaporation_rate = evaporation_rate
         self.Q = Q
-
+        self.num_elitist = 10
+        self.tau_min = 0.01
+        self.tau_max = 2.0
         # n: number of customers
         self.n = self.problem.num_customers
 
         # Initialize a single 3D pheromone matrix with dimensions (n+1) x (n+1) x 2.
-        pheromones = np.ones((self.n + 1, self.n + 1, 2))
+        pheromones = np.full((self.n + 1, self.n + 1, 2), self.tau_max)
         for j, customer in enumerate(self.problem.customers, start=1):
             if customer.customer_type == 1:
                 pheromones[:, j, 1] = 0.0
@@ -469,19 +475,32 @@ class PACO(Solver):
         return transitions, final_route
 
     def update_pheromones(self, solutions):
-        """Updates the integrated 3D pheromone matrix based on the ant solutions."""
+        """
+        Updates the integrated 3D pheromone matrix based on ant solutions using both max–min and elitist strategies.
+        """
+        # Evaporate pheromones
         self.shared_pheromones *= (1 - self.evaporation_rate)
+        solutions = sorted(solutions, key=lambda x: x[1])
+        solutions = solutions[:self.num_elitist]  # Keep only the best solutions
+
+        # Standard deposit from each ant's solution
         for transitions, fitness in solutions:
             deposit = self.Q / (fitness if fitness > 0 else 1e-8)
             for (i, j, d) in transitions:
                 self.shared_pheromones[i, j, d] += deposit
 
+        # Max–min pheromone clamping:
+        if self.global_best_fitness < float('inf'):
+            # Clamp the pheromone matrix to lie within [tau_min, tau_max]
+            self.shared_pheromones[:] = np.clip(self.shared_pheromones, self.tau_min, self.tau_max)
+
+        # Enforce restrictions on pheromone values for customer types
         for j, customer in enumerate(self.problem.customers, start=1):
             if customer.customer_type == 1:
                 self.shared_pheromones[:, j, 1] = 0.0
             elif customer.customer_type == 2:
                 self.shared_pheromones[:, j, 0] = 0.0
-
+            
     # --- Bundle Multiple Ants in One Task ---
     def multi_ant_solution(self, num_ants_in_task, pheromone_shm_name, shape, dtype):
         # Attach to shared memory for pheromones
@@ -497,6 +516,9 @@ class PACO(Solver):
             ant_compute_time = worker_ant_end - worker_ant_start
             # Append result with compute time for overhead estimation
             results.append((transitions, fitness, final_route, routes, ant_compute_time))
+        # select elitist
+        results = sorted(results, key=lambda x: x[1])
+        results = results[:self.num_elitist]
         shm.close()  # Detach from shared memory
         return results
 
@@ -557,12 +579,13 @@ class PACO(Solver):
 
 def main_PACO():
     instance = Problem()
-    instance.load_data("data/25/C101_co_25.txt")
-    # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
-    aco = PACO(instance, num_ants=5000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    instance.load_data("data/50/C101_co_50.txt")
+    aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    # aco = PACO(instance, num_ants=1000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
     import timeit
-    export_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
+    # export_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
+    # export_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
     print(f"Best Fitness: {aco.global_best_fitness}")
     print(f"Execution Time: {run_time:.2f} seconds")
     print("Best Solution:")
