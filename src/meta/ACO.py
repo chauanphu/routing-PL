@@ -5,6 +5,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from multiprocessing import shared_memory
+from statistics import mean
 
 if __name__ == "__main__":
     from solver import Problem, Solver, Node, print_routes
@@ -429,6 +430,9 @@ class PACO(Solver):
         self.global_best_solution = None
         self.global_best_routes = None
         self.fitness_history = []
+        # To track overhead (average overhead per ant per iteration)
+        self.overhead_history = []
+        self.overhead = None
 
     def construct_solution(self, shared_pheromones):
         """
@@ -480,8 +484,8 @@ class PACO(Solver):
         """
         # Evaporate pheromones
         self.shared_pheromones *= (1 - self.evaporation_rate)
-        solutions = sorted(solutions, key=lambda x: x[1])
-        solutions = solutions[:self.num_elitist]  # Keep only the best solutions
+        # solutions = sorted(solutions, key=lambda x: x[1])
+        # solutions = solutions[:self.num_elitist]  # Keep only the best solutions
 
         # Standard deposit from each ant's solution
         for transitions, fitness in solutions:
@@ -489,10 +493,10 @@ class PACO(Solver):
             for (i, j, d) in transitions:
                 self.shared_pheromones[i, j, d] += deposit
 
-        # Max–min pheromone clamping:
-        if self.global_best_fitness < float('inf'):
-            # Clamp the pheromone matrix to lie within [tau_min, tau_max]
-            self.shared_pheromones[:] = np.clip(self.shared_pheromones, self.tau_min, self.tau_max)
+        # # Max–min pheromone clamping:
+        # if self.global_best_fitness < float('inf'):
+        #     # Clamp the pheromone matrix to lie within [tau_min, tau_max]
+        #     self.shared_pheromones[:] = np.clip(self.shared_pheromones, self.tau_min, self.tau_max)
 
         # Enforce restrictions on pheromone values for customer types
         for j, customer in enumerate(self.problem.customers, start=1):
@@ -521,67 +525,93 @@ class PACO(Solver):
         results = results[:self.num_elitist]
         shm.close()  # Detach from shared memory
         return results
-
+    
     def optimize(self, verbose=True):
+        """
+        Main optimization loop.
+        Returns a tuple: (global_best_solution, global_best_fitness, global_best_routes)
+        Also computes an average overhead per ant which is stored in self.overhead.
+        """
         pheromone_shape = self.shared_pheromones.shape
         pheromone_dtype = self.shared_pheromones.dtype
+
         try:
             with ProcessPoolExecutor() as executor:
                 for iteration in range(self.num_iterations):
-                    iteration_start = time.time()
+                    iter_start = time.time()
                     futures = []
                     submission_times = {}
                     num_tasks = self.num_ants // self.batch_size
+                    # Submit tasks.
                     for _ in range(num_tasks):
-                        submit_time = time.time()
+                        sub_time = time.time()
                         future = executor.submit(self.multi_ant_solution,
-                                                self.batch_size,
-                                                self.pheromone_shm.name,
-                                                pheromone_shape,
-                                                pheromone_dtype)
+                                                 self.batch_size,
+                                                 self.pheromone_shm.name,
+                                                 pheromone_shape,
+                                                 pheromone_dtype)
                         futures.append(future)
-                        submission_times[future] = submit_time
+                        submission_times[future] = sub_time
 
                     solutions = []
-                    overhead_times = []
-                    # Retrieve task results as they complete
+                    overheads = []
+                    # Retrieve results.
                     for future in as_completed(futures):
-                        master_end = time.time()
-                        round_trip_time = master_end - submission_times[future]
-                        task_results = future.result()  # List of ant results from one task
-                        total_worker_time = sum(result[4] for result in task_results)
-                        # Overhead is the difference between master round-trip and total worker compute time for this task
-                        overhead = round_trip_time - total_worker_time
-                        overhead_times.append(overhead)
+                        iter_end = time.time()
+                        round_trip = iter_end - submission_times[future] # Round trip time is the time taken for the task to complete
+                        task_results = future.result()
+                        total_worker_time = sum(res[4] for res in task_results)
+                        overhead = round_trip - total_worker_time # Overhead = round-trip time - total worker time
+                        overheads.append(overhead)
                         solutions.extend(task_results)
+
+                    # Update pheromones using the solutions from all ants.
+                    # We assume each task returns (transitions, fitness, ..., ...)
                     self.update_pheromones([(transitions, fitness) for (transitions, fitness, _, _, _) in solutions])
-                    iteration_end = time.time()
-                    avg_overhead_per_task = sum(overhead_times) / len(overhead_times) if overhead_times else 0
-                    # Since each task processes self.batch_size ants, compute average overhead per ant:
-                    avg_overhead_per_ant = avg_overhead_per_task / self.batch_size
-                    # Update pheromones using the computed solutions (ignoring the worker time field)
+                    
+                    # Update global best.
                     for (transitions, fitness, final_route, routes, _) in solutions:
                         if fitness < self.global_best_fitness:
                             self.global_best_fitness = fitness
                             self.global_best_solution = final_route
                             self.global_best_routes = routes
+
+                    # Record fitness history.
                     self.fitness_history.append(self.global_best_fitness)
+                    
+                    iter_end = time.time()
+                    avg_overhead = sum(overheads) / len(overheads) if overheads else 0
+                    overhead_per_ant = avg_overhead / self.batch_size
+                    self.overhead_history.append(overhead_per_ant)
+                    
                     if verbose:
-                        print(f"Iteration completed {iteration}/{self.num_iterations}\tBest Fitness = {self.global_best_fitness:.2f}\tTime: {iteration_end - iteration_start:.2f}")
+                        print(f"Iteration {iteration+1}/{self.num_iterations} | Best Fitness: {self.global_best_fitness:.2f} | Iteration Time: {iter_end - iter_start:.2f}s")
         finally:
             self.cleanup()
+
+        # Aggregate overall overhead.
+        if self.overhead_history:
+            self.overhead = mean(self.overhead_history)
+        else:
+            self.overhead = None
+
         return self.global_best_solution, self.global_best_fitness, self.global_best_routes
 
-    # --- Cleanup Shared Memory ---
     def cleanup(self):
-        self.pheromone_shm.close()
-        self.pheromone_shm.unlink()
+        """
+        Cleans up shared memory resources.
+        """
+        try:
+            self.pheromone_shm.close()
+            self.pheromone_shm.unlink()
+        except Exception as e:
+            print("Cleanup error:", e)
 
 def main_PACO():
     instance = Problem()
     instance.load_data("data/50/C101_co_50.txt")
-    aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
-    # aco = PACO(instance, num_ants=1000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    aco = PACO(instance, num_ants=1000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
     import timeit
     # export_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
