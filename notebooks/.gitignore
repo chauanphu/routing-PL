@@ -2,3 +2,6 @@ cache
 
 # Road network
 *.graphml
+
+# Experiment data
+experiment
