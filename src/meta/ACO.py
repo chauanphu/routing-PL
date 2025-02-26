@@ -484,8 +484,8 @@ class PACO(Solver):
         """
         # Evaporate pheromones
         self.shared_pheromones *= (1 - self.evaporation_rate)
-        # solutions = sorted(solutions, key=lambda x: x[1])
-        # solutions = solutions[:self.num_elitist]  # Keep only the best solutions
+        solutions = sorted(solutions, key=lambda x: x[1])
+        solutions = solutions[:self.num_elitist]  # Keep only the best solutions
 
         # Standard deposit from each ant's solution
         for transitions, fitness in solutions:

@@ -1,4 +1,5 @@
 import csv
+import os
 import time
 from statistics import mean, stdev
 
@@ -37,6 +38,100 @@ def run_paco_instance(problem, num_ants, batch_size, other_params):
         'runtime': total_runtime,
         'overhead': overhead
     }
+
+def run_solver_instance(solver_class, problem, solver_params):
+    """
+    Runs a single instance of a solver.
+    It creates a fresh solver instance, runs optimize() to get the best solution, and measures runtime.
+    """
+    # Create an instance of the solver
+    solver_instance = solver_class(problem, **solver_params)
+    
+    start_time = time.time()
+    # Run the optimization (assumed to return (solution, fitness, routes))
+    result = solver_instance.optimize(verbose=False)
+    end_time = time.time()
+    runtime = end_time - start_time
+
+    # For sequential solvers, we are only interested in best_fitness and runtime.
+    best_fitness = result[1]
+    
+    # Cleanup if the solver defines such a method (optional)
+    if hasattr(solver_instance, "cleanup"):
+        solver_instance.cleanup()
+    
+    return {
+        'best_fitness': best_fitness,
+        'runtime': runtime
+    }
+
+class Experiment:
+    def __init__(self, problem, solvers_dict, num_runs=3):
+        """
+        :param problem: The common Problem instance used for all solvers.
+        :param solvers_dict: A dictionary mapping solver names to a tuple (solver_class, solver_params)
+                             where solver_class is a class inheriting from Solver and solver_params is a dict.
+                             Example:
+                             {
+                               "PACO": (PACO, {"num_ants": 1000, "batch_size": 100, "alpha": 1.0, ...}),
+                               "OtherSolver": (OtherSolver, {"param1": value, ...})
+                             }
+        :param num_runs: Number of independent runs per solver configuration.
+        """
+        self.problem = problem
+        self.solvers_dict = solvers_dict
+        self.num_runs = num_runs
+        # To store results for each solver: {solver_name: [list of run dicts]}
+        self.results = {}
+
+    def run(self):
+        """
+        Runs each solver for num_runs sequentially.
+        """
+        for solver_name, (solver_class, solver_params) in self.solvers_dict.items():
+            print(f"Running solver: {solver_name}")
+            solver_results = []
+            for run in range(self.num_runs):
+                print(f"  Run {run+1}/{self.num_runs}...", end="")
+                res = run_solver_instance(solver_class, self.problem, solver_params)
+                solver_results.append(res)
+                print(f" Best Fitness: {res['best_fitness']}, Runtime: {res['runtime']:.2f}s")
+            self.results[solver_name] = solver_results
+        return self.results
+
+    def write_csv_report(self):
+        """
+        Generates a CSV report for each solver.
+        Each CSV file is named "results_<solver_name>.csv" and contains columns:
+        'run', 'best_fitness', 'runtime'
+        """
+        for solver_name, runs in self.results.items():
+            filename = f"output/experiment/results_{solver_name}.csv"
+            with open(filename, mode='w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["run", "best_fitness", "runtime"])
+                for i, res in enumerate(runs, start=1):
+                    writer.writerow([i, res['best_fitness'], res['runtime']])
+            print(f"Report for {solver_name} written to: {filename}")
+
+    def aggregate_results(self, solver_name):
+        """
+        Aggregates the results for a specific solver.
+        :param solver_name: The name of the solver (as used in solvers_dict).
+        :return: A dictionary with aggregated values (mean and stdev) for best_fitness and runtime.
+        """
+        runs = self.results.get(solver_name, [])
+        if not runs:
+            return None
+        fitness_vals = [res['best_fitness'] for res in runs]
+        runtime_vals = [res['runtime'] for res in runs]
+        summary = {
+            'avg_best_fitness': mean(fitness_vals),
+            'std_best_fitness': stdev(fitness_vals) if len(fitness_vals) > 1 else 0,
+            'avg_runtime': mean(runtime_vals),
+            'std_runtime': stdev(runtime_vals) if len(runtime_vals) > 1 else 0
+        }
+        return summary
 
 
 class ParallelExperiment:
@@ -125,6 +220,7 @@ class ParallelExperiment:
         summary = {}
         for key, metrics in agg.items():
             summary[key] = {
+                'min_best_fitness': min(metrics['best_fitness']),
                 'avg_best_fitness': mean(metrics['best_fitness']),
                 'std_best_fitness': stdev(metrics['best_fitness']) if len(metrics['best_fitness']) > 1 else 0,
                 'avg_runtime': mean(metrics['runtime']),
@@ -143,12 +239,13 @@ class ParallelExperiment:
         :param param_name: The parameter used for grouping (e.g., 'num_ants' or 'batch_size').
         """
         header = [param_name, 'avg_best_fitness', 'std_best_fitness',
-                  'avg_runtime', 'std_runtime', 'avg_overhead', 'std_overhead']
+                  'min_best_fitness', 'avg_runtime', 'std_runtime', 'avg_overhead', 'std_overhead']
         with open(filename, mode='w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(header)
             for key, metrics in sorted(summary.items()):
                 writer.writerow([key,
+                                 metrics['min_best_fitness'],
                                  metrics['avg_best_fitness'],
                                  metrics['std_best_fitness'],
                                  metrics['avg_runtime'],
@@ -158,12 +255,11 @@ class ParallelExperiment:
         print("Aggregated report written to:", filename)
 
 
-# Example usage:
-if __name__ == '__main__':
+def main(INSTANCE):
     # from problem_module import Problem
     # Initialize your problem instance appropriately.
     instance = Problem()
-    instance.load_data("data/50/C101_co_50.txt")
+    instance.load_data(f"data/100/{INSTANCE}.txt")
 
     extra_params = {'alpha': 1.0, 'beta': 1.0, 'evaporation_rate': 0.1, 'Q': 1.0, 'num_iterations': 100}
 
@@ -176,15 +272,20 @@ if __name__ == '__main__':
     fixed_batch_size = 100
     results_ants = experiment.run_experiment_varying_ants(fixed_batch_size=fixed_batch_size,
                                                            ants_values=ants_values)
-    experiment.write_csv_report("test_1.csv")
+    experiment.write_csv_report(f"output/experiment/{INSTANCE}_test1.csv")
     summary_ants = experiment.aggregate_results(param_name='num_ants')
-    experiment.write_aggregated_report(summary_ants, "test_1_summary.csv", param_name='num_ants')
+    experiment.write_aggregated_report(summary_ants, f"output/experiment/{INSTANCE}_test1_summary.csv", param_name='num_ants')
 
     # Experiment 2: Vary batch size (with fixed number of ants)
-    batch_sizes = [50, 100, 200, 400]
+    batch_sizes = [20, 50, 100, 200, 500]
     fixed_num_ants = 1000
     results_batch = experiment.run_experiment_varying_batch_size(fixed_num_ants=fixed_num_ants,
                                                                  batch_sizes=batch_sizes)
-    experiment.write_csv_report("test_2.csv")
+    experiment.write_csv_report(f"output/experiment/{INSTANCE}_test2.csv")
     summary_batch = experiment.aggregate_results(param_name='batch_size')
-    experiment.write_aggregated_report(summary_batch, "test_2_summary.csv", param_name='batch_size')
+    experiment.write_aggregated_report(summary_batch, f"output/experiment/{INSTANCE}_test2_summary.csv", param_name='batch_size')
+
+    
+# Example usage:
+if __name__ == '__main__':
+    main("RC101_co_100")
