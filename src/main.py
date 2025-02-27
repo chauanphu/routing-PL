@@ -17,20 +17,18 @@ solvers_to_test = {
     # ),
     "Parallel ACO": (
         PACO,  
-        {"num_ants": 2000, "batch_size": 100, "alpha": 1.0, "beta": 1.0, "evaporation_rate": 0.1, "Q": 1.0, "num_iterations": 100}
+        {"num_ants": 3000, "batch_size": 100, "alpha": 1.0, "beta": 1.0, "evaporation_rate": 0.2, "Q": 1.0, "num_iterations": 100, "elitist_num": 5}
     ),
-    # "Classic ACO": (
-    #     ClassicACO,  
-    #     {"num_ants": 1000, "alpha": 1.0, "beta": 1.0, "evaporation_rate": 0.1, "Q": 1.0, "num_iterations": 100}
-    # ),
 }
 
 # List all instances file in data/100 folder
 import os
 instances = os.listdir("data/100")
 instances.sort()
-except_instances = []
-instances = [instance for instance in instances if instance not in except_instances]
+# Exclude 1 to 6
+# except_instances = []
+# instances = [instance for instance in instances if instance not in except_instances]
+instances = instances[9:34]
 for instance in instances:
     print(instance)
 # Sort the instances, by name ascending

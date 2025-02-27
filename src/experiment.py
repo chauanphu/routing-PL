@@ -57,8 +57,8 @@ def run_solver_instance(solver_class, problem, solver_params):
     best_fitness = result[1]
     num_vehicles = len(result[2])
     # Cleanup if the solver defines such a method (optional)
-    # if hasattr(solver_instance, "cleanup"):
-    #     solver_instance.cleanup()
+    if hasattr(solver_instance, "cleanup"):
+        solver_instance.cleanup()
     
     return {
         'best_fitness': best_fitness,
@@ -104,15 +104,15 @@ class Experiment:
         """
         Generates a CSV report for each solver.
         Each CSV file is named "results_<solver_name>.csv" and contains columns:
-        'run', 'best_fitness', 'runtime'
+        'run', 'best_fitness', 'num_vehicles', 'runtime'
         """
         for solver_name, runs in self.results.items():
-            filename = f"output/results/{problem_name}_{solver_name}.csv"
+            filename = f"output/results/100/{problem_name}_{solver_name}.csv"
             with open(filename, mode='w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["run", "best_fitness", "runtime"])
+                writer.writerow(["run", "best_fitness", "num_vehicles", "runtime"])
                 for i, res in enumerate(runs, start=1):
-                    writer.writerow([i, res['best_fitness'], res['runtime']])
+                    writer.writerow([i, res['best_fitness'], res['num_vehicles'], res['runtime']])
             print(f"Report for {solver_name} written to: {filename}")
 
     def aggregate_results(self, solver_name):
@@ -268,23 +268,25 @@ def main(INSTANCE):
                                     other_params=extra_params,
                                     num_runs=10)
 
-    # Experiment 1: Vary number of ants (with fixed batch size)
-    ants_values = [100, 200, 500, 1000]
-    fixed_batch_size = 100
-    results_ants = experiment.run_experiment_varying_ants(fixed_batch_size=fixed_batch_size,
-                                                           ants_values=ants_values)
-    experiment.write_csv_report(f"output/experiment/{INSTANCE}_test1.csv")
-    summary_ants = experiment.aggregate_results(param_name='num_ants')
-    experiment.write_aggregated_report(summary_ants, f"output/experiment/{INSTANCE}_test1_summary.csv", param_name='num_ants')
+    # # Experiment 1: Vary number of ants (with fixed batch size)
+    # ants_values = [100, 200, 500, 1000]
+    # fixed_batch_size = 100
+    # results_ants = experiment.run_experiment_varying_ants(fixed_batch_size=fixed_batch_size,
+    #                                                        ants_values=ants_values)
+    # experiment.write_csv_report(f"output/experiment/{INSTANCE}_test1.csv")
+    # summary_ants = experiment.aggregate_results(param_name='num_ants')
+    # experiment.write_aggregated_report(summary_ants, f"output/experiment/{INSTANCE}_test1_summary.csv", param_name='num_ants')
 
-    # Experiment 2: Vary batch size (with fixed number of ants)
-    batch_sizes = [20, 50, 100, 200, 500]
-    fixed_num_ants = 1000
-    results_batch = experiment.run_experiment_varying_batch_size(fixed_num_ants=fixed_num_ants,
-                                                                 batch_sizes=batch_sizes)
-    experiment.write_csv_report(f"output/experiment/{INSTANCE}_test2.csv")
-    summary_batch = experiment.aggregate_results(param_name='batch_size')
-    experiment.write_aggregated_report(summary_batch, f"output/experiment/{INSTANCE}_test2_summary.csv", param_name='batch_size')
+    # # Experiment 2: Vary batch size (with fixed number of ants)
+    # batch_sizes = [20, 50, 100, 200, 500]
+    # fixed_num_ants = 1000
+    # results_batch = experiment.run_experiment_varying_batch_size(fixed_num_ants=fixed_num_ants,
+    #                                                              batch_sizes=batch_sizes)
+    # experiment.write_csv_report(f"output/experiment/{INSTANCE}_test2.csv")
+    # summary_batch = experiment.aggregate_results(param_name='batch_size')
+    # experiment.write_aggregated_report(summary_batch, f"output/experiment/{INSTANCE}_test2_summary.csv", param_name='batch_size')
+
+    ## Experiment 3: Vary number of elite ants (with fixed batch size)
 
     
 # Example usage:

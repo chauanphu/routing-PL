@@ -385,7 +385,7 @@ class SACO(Solver):
         return self.best_solution, self.global_best_fitness, self.global_best_routes
 
 class PACO(Solver):
-    def __init__(self, problem: Problem, num_ants=1000, num_iterations=100, batch_size=100, alpha=1.0, beta=2.0, evaporation_rate=0.2, Q=1.0):
+    def __init__(self, problem: Problem, num_ants=1000, num_iterations=100, batch_size=100, alpha=1.0, beta=2.0, evaporation_rate=0.2, Q=1.0, elitist_num= 10):
         """
         Initializes the ACO optimizer for the VRPPL problem using a 3D pheromone matrix and sets up key parameters for
         ant colony optimization with batch processing for parallel execution.
@@ -398,6 +398,8 @@ class PACO(Solver):
             alpha (float, optional): The factor controlling the influence of pheromone trails in ant decision-making. Defaults to 1.0.
             beta (float, optional): The factor controlling the influence of heuristic information (e.g., distance) in ant decisions. Defaults to 2.0.
             evaporation_rate (float, optional): The rate at which pheromone intensity diminishes over time, promoting exploration. Defaults to 0.1.
+            Q (float, optional): The pheromone deposit constant, influencing the amount of pheromone deposited by ants. Defaults to 1.0.
+            elitist_num (int, optional): The number of elite solutions to retain. Defaults to 10.
         """
         super().__init__(problem.node2routes, num_iterations=num_iterations)
         self.problem: Problem = problem
@@ -408,7 +410,7 @@ class PACO(Solver):
         self.beta = beta
         self.evaporation_rate = evaporation_rate
         self.Q = Q
-        self.num_elitist = 10
+        self.num_elitist = elitist_num
         self.tau_min = 0.01
         self.tau_max = 2.0
         # n: number of customers
@@ -586,7 +588,7 @@ class PACO(Solver):
                     
                     if verbose:
                         print(f"Iteration {iteration+1}/{self.num_iterations} | Best Fitness: {self.global_best_fitness:.2f} | Iteration Time: {iter_end - iter_start:.2f}s")
-        finally:
+        except:
             self.cleanup()
 
         # Aggregate overall overhead.
@@ -609,13 +611,14 @@ class PACO(Solver):
 
 def main_PACO():
     instance = Problem()
-    instance.load_data("data/50/C101_co_50.txt")
+    instance.load_data("data/100/C208_co_100.txt")
     # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
-    aco = PACO(instance, num_ants=1000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
+    aco = PACO(instance, num_ants=3000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.2, Q=1.0, elitist_num=5)
     import timeit
     # export_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
     # export_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
+    aco.cleanup()
     print(f"Best Fitness: {aco.global_best_fitness}")
     print(f"Execution Time: {run_time:.2f} seconds")
     print("Best Solution:")
