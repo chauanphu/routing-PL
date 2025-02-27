@@ -55,14 +55,15 @@ def run_solver_instance(solver_class, problem, solver_params):
 
     # For sequential solvers, we are only interested in best_fitness and runtime.
     best_fitness = result[1]
-    
+    num_vehicles = len(result[2])
     # Cleanup if the solver defines such a method (optional)
-    if hasattr(solver_instance, "cleanup"):
-        solver_instance.cleanup()
+    # if hasattr(solver_instance, "cleanup"):
+    #     solver_instance.cleanup()
     
     return {
         'best_fitness': best_fitness,
-        'runtime': runtime
+        'runtime': runtime,
+        'num_vehicles': num_vehicles
     }
 
 class Experiment:
@@ -95,18 +96,18 @@ class Experiment:
                 print(f"  Run {run+1}/{self.num_runs}...", end="")
                 res = run_solver_instance(solver_class, self.problem, solver_params)
                 solver_results.append(res)
-                print(f" Best Fitness: {res['best_fitness']}, Runtime: {res['runtime']:.2f}s")
+                print(f" Best Fitness: {res['best_fitness']}\t| Runtime: {res['runtime']:.2f}s\t| Number of Vehicles: {res['num_vehicles']}")
             self.results[solver_name] = solver_results
         return self.results
 
-    def write_csv_report(self):
+    def write_csv_report(self, problem_name=None):
         """
         Generates a CSV report for each solver.
         Each CSV file is named "results_<solver_name>.csv" and contains columns:
         'run', 'best_fitness', 'runtime'
         """
         for solver_name, runs in self.results.items():
-            filename = f"output/experiment/results_{solver_name}.csv"
+            filename = f"output/results/{problem_name}_{solver_name}.csv"
             with open(filename, mode='w', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(["run", "best_fitness", "runtime"])

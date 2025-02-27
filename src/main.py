@@ -4,33 +4,45 @@ from meta.ACO import AntColonyOptimization as ClassicACO, SACO, PACO
 from meta.SA import SimulatedAnnealing as SA
 from meta.GreyWolf import GreyWolfOptimization as GWO
 
-# Create a problem instance
-instance = Problem()
-instance.load_data("data/100/C101_co_100.txt")
-
+def log_to_file(log, filename):
+    print(log)
+    with open(filename, "a") as f:
+        f.write(log)
+    
 # Define your solvers and parameters:
 solvers_to_test = {
-    "Sequential ACO": (
-        SACO,  
-        {"num_ants": 1000, "alpha": 1.0, "beta": 1.0, "evaporation_rate": 0.1, "Q": 1.0, "num_iterations": 100}
-    )
+    # "Sequential_ACO": (
+    #     SACO,  
+    #     {"num_ants": 1000, "alpha": 1.0, "beta": 1.0, "evaporation_rate": 0.1, "Q": 1.0, "num_iterations": 100}
+    # ),
+    "Parallel ACO": (
+        PACO,  
+        {"num_ants": 2000, "batch_size": 100, "alpha": 1.0, "beta": 1.0, "evaporation_rate": 0.1, "Q": 1.0, "num_iterations": 100}
+    ),
+    # "Classic ACO": (
+    #     ClassicACO,  
+    #     {"num_ants": 1000, "alpha": 1.0, "beta": 1.0, "evaporation_rate": 0.1, "Q": 1.0, "num_iterations": 100}
+    # ),
 }
 
-# Create an Experiment instance.
-experiment = Experiment(problem=instance,
-                        solvers_dict=solvers_to_test,
-                        num_runs=10)
-
-# Run experiments sequentially.
-results = experiment.run()
-
-# Write a CSV report for each solver.
-experiment.write_csv_report()
-
-# Optionally, print aggregated results.
-for solver in solvers_to_test.keys():
-    summary = experiment.aggregate_results(solver)
-    if summary is not None:
-        print(f"Aggregated results for {solver}: {summary}")
-    else:
-        print(f"No results available for {solver}.")
+# List all instances file in data/100 folder
+import os
+instances = os.listdir("data/100")
+instances.sort()
+except_instances = []
+instances = [instance for instance in instances if instance not in except_instances]
+for instance in instances:
+    print(instance)
+# Sort the instances, by name ascending
+# Solve all instances in data/100 folder
+for instance_file in instances:
+    try:
+        instance_name = instance_file.split(".")[0]
+        instance = Problem()
+        instance.load_data(f"data/100/{instance_file}")
+        experiment = Experiment(problem=instance, solvers_dict=solvers_to_test, num_runs=10)
+        results = experiment.run()
+        experiment.write_csv_report(problem_name=instance_name)
+    except Exception as e:
+        print(f"Error: {e}\n")
+        continue
