@@ -8,7 +8,7 @@ class GreyWolfOptimization(Solver):
         Initializes the Grey Wolf Optimization instance.
         
         Parameters:
-            objective_function (callable): The function to be minimized.
+            problem (callable): The function to be minimized.
             num_wolves (int): The number of wolves (candidate solutions).
             num_iterations (int): The maximum number of iterations.
             search_space (list of tuples): The bounds for each dimension.

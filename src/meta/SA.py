@@ -1,10 +1,14 @@
 import random
 import math
-from solver import Node, Problem, Solver, print_routes
+import time
+if __name__ == "__main__":
+    from solver import Problem, Solver, Node, print_routes
+else:
+    from meta.solver import Problem, Solver, Node, print_routes
 
 class SimulatedAnnealing(Solver):
     def __init__(self, problem: Problem, init_temperature: float = 1000.0, cooling_rate: float = 0.995, beta: float = 1.0,
-                 min_temperature: float = 0.5, iterations_per_temp: int = 100, max_iters: int = 100, non_improvement: int = 100):
+                 min_temperature: float = 0.5, iterations_per_temp: int = 100, max_iters: int = 100, non_improvement: int = 100, p = 0.5):
         """
         Initialize the Simulated Annealing optimizer.
         
@@ -25,6 +29,7 @@ class SimulatedAnnealing(Solver):
         self.max_iters = max_iters
         self.non_improvement = non_improvement
         self.num_iterations = 0
+        self.p = p
 
     def neighbor(self, solution: list[Node]) -> list[Node]:
         """
@@ -89,8 +94,8 @@ class SimulatedAnnealing(Solver):
         """
         # Generate an initial solution.
         # 1. Generate a random solution.
-        current_solution = self.problem.initialize_solution(p=0.1)[0]
-        current_cost, current_routes = self.problem.permu2route(current_solution, explore=True)
+        current_solution = self.problem.initialize_solution(p=self.p)[0]
+        current_cost, current_routes = self.problem.permu2route(current_solution)
         # 2. Initialize best solution with the random solution.
         best_solution = current_solution
         best_cost = current_cost
@@ -100,7 +105,7 @@ class SimulatedAnnealing(Solver):
         iter_count = 0
         non_improvement_count = 0
         found_best = False
-        while self.T > self.min_temperature and iter_count < self.max_iters and non_improvement_count < self.non_improvement:
+        while self.T > self.min_temperature and non_improvement_count < self.non_improvement:
             iter_count += 1
             if verbose:
                 print(f"Iteraion: {iter_count}/{self.max_iters}:\tTemperature: {self.T:.2f} / {self.min_temperature:.2f}, Best Objective: {best_cost:.2f}")
@@ -108,7 +113,7 @@ class SimulatedAnnealing(Solver):
             for _ in range(self.iterations_per_temp):
                     # Generate a neighboring solution.
                 candidate_solution = self.neighbor(current_solution)
-                candidate_cost, candidate_routes = self.problem.permu2route(candidate_solution, explore=True, p=0.1)
+                candidate_cost, candidate_routes = self.problem.permu2route(candidate_solution)
                 delta = candidate_cost - current_cost
                 
                 # Accept the candidate if it's better, or with a probability if worse.
@@ -141,14 +146,15 @@ class SimulatedAnnealing(Solver):
 if __name__ == "__main__":
     # Assuming you have already created and loaded your Problem instance.
     problem = Problem()
-    problem.load_data("data/100/C102_co_100.txt")  # Make sure your data file is correctly formatted.
-    
+    problem.load_data("data/25/C101_co_25.txt")  # Make sure your data file is correctly formatted.
+    start_time = time.time()
     # Create an instance of the Simulated Annealing optimizer.
     sa = SimulatedAnnealing(problem, init_temperature=30.0, cooling_rate=0.99, beta=1.0,
-                            min_temperature=0.05, iterations_per_temp=1000, max_iters=200, non_improvement=50)
+                            min_temperature=0.05, iterations_per_temp=1000, max_iters=1000, non_improvement=50, p=0.5)
     
     # Run the optimization.
     sa.optimize()
+    print("Elapsed time (s):", time.time() - start_time)
     print("Distance: ", sa.global_best_fitness)
     print("Solution: ", [node for node in sa.global_best_position])
     print_routes(sa.global_best_routes)

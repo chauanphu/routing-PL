@@ -3,3 +3,8 @@ __pycache__/
 __init__.py
 
 venv
+.pypyvenv
+*.dist
+.vscode
+build
+output/*
