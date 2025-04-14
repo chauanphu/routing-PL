@@ -501,11 +501,11 @@ class PACO(Solver):
         #     self.shared_pheromones[:] = np.clip(self.shared_pheromones, self.tau_min, self.tau_max)
 
         # Enforce restrictions on pheromone values for customer types
-        for j, customer in enumerate(self.problem.customers, start=1):
-            if customer.customer_type == 1:
-                self.shared_pheromones[:, j, 1] = 0.0
-            elif customer.customer_type == 2:
-                self.shared_pheromones[:, j, 0] = 0.0
+        # for j, customer in enumerate(self.problem.customers, start=1):
+        #     if customer.customer_type == 1:
+        #         self.shared_pheromones[:, j, 1] = 0.0
+        #     elif customer.customer_type == 2:
+        #         self.shared_pheromones[:, j, 0] = 0.0
             
     # --- Bundle Multiple Ants in One Task ---
     def multi_ant_solution(self, num_ants_in_task, pheromone_shm_name, shape, dtype):
@@ -611,7 +611,7 @@ class PACO(Solver):
 
 def main_PACO():
     instance = Problem()
-    instance.load_data("data/100/C208_co_100.txt")
+    instance.load_data("data/50/C101_co_50.txt")
     # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
     aco = PACO(instance, num_ants=3000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.2, Q=1.0, elitist_num=5)
     import timeit
