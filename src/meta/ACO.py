@@ -1,11 +1,11 @@
-from concurrent.futures import ProcessPoolExecutor, as_completed
 import math
 import random
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from multiprocessing import shared_memory
 from statistics import mean
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import shared_memory
 
 if __name__ == "__main__":
     from solver import Problem, Solver, Node, print_routes
@@ -15,7 +15,7 @@ else:
 def euclidean_distance(p1, p2):
     return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
 
-def export_pheromones_heatmap(pheromones, filename="pheromones_heatmap.png"):
+def plot_pheromones_heatmap(pheromones, filename="pheromones_heatmap.png"):
     """
     Plots both layers of the 3D pheromone matrix as heatmaps.
     
@@ -39,7 +39,7 @@ def export_pheromones_heatmap(pheromones, filename="pheromones_heatmap.png"):
     plt.savefig(filename)
     plt.close()
 
-def export_pheromones_3d(pheromones, filename="pheromones_3d.png", threshold=0.01):
+def plot_pheromones_3d(pheromones, filename="pheromones_3d.png", threshold=0.01):
     """
     Visualizes the 3D pheromone matrix as a 3D scatter plot.
     Each point represents a pheromone value between two nodes for a specific delivery mode.
@@ -549,18 +549,6 @@ class PACO(Solver):
             deposit = self.Q / (fitness if fitness > 0 else 1e-8)
             for (i, j, d) in transitions:
                 self.shared_pheromones[i, j, d] += deposit
-
-        # # Max–min pheromone clamping:
-        # if self.global_best_fitness < float('inf'):
-        #     # Clamp the pheromone matrix to lie within [tau_min, tau_max]
-        #     self.shared_pheromones[:] = np.clip(self.shared_pheromones, self.tau_min, self.tau_max)
-
-        # Enforce restrictions on pheromone values for customer types
-        # for j, customer in enumerate(self.problem.customers, start=1):
-        #     if customer.customer_type == 1:
-        #         self.shared_pheromones[:, j, 1] = 0.0
-        #     elif customer.customer_type == 2:
-        #         self.shared_pheromones[:, j, 0] = 0.0
             
     # --- Bundle Multiple Ants in One Task ---
     def multi_ant_solution(self, num_ants_in_task, pheromone_shm_name, shape, dtype):
@@ -571,15 +559,12 @@ class PACO(Solver):
         for _ in range(num_ants_in_task):
             worker_ant_start = time.time()
             transitions, final_route = self.construct_solution(shared_pheromones)
-            # (Optionally record a mid-time if needed)
             fitness, routes = self.problem.node2routes(final_route)
             worker_ant_end = time.time()
             ant_compute_time = worker_ant_end - worker_ant_start
             # Append result with compute time for overhead estimation
             results.append((transitions, fitness, final_route, routes, ant_compute_time))
         # select elitist
-        results = sorted(results, key=lambda x: x[1])
-        results = results[:self.num_elitist]
         shm.close()  # Detach from shared memory
         return results
     
@@ -664,16 +649,15 @@ class PACO(Solver):
         except Exception as e:
             print("Cleanup error:", e)
 
-def main_PACO():
+def main():
     instance = Problem()
     instance.load_data("data/50/C101_co_50.txt")
-    # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
     aco = PACO(instance, num_ants=1000, batch_size=50, num_iterations=50, alpha=1.0, beta=1.0, evaporation_rate=0.2, Q=1.0, elitist_num=5)
     import timeit
-    # export_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
+    # plot_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
-    export_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
-    export_pheromones_3d(aco.shared_pheromones, filename="output/final_pheromones_3d.png")
+    plot_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
+    plot_pheromones_3d(aco.shared_pheromones, filename="output/final_pheromones_3d.png")
     aco.cleanup()
     print(f"Best Fitness: {aco.global_best_fitness}")
     print(f"Execution Time: {run_time:.2f} seconds")
@@ -683,4 +667,4 @@ def main_PACO():
     aco.plot_routes()
 
 if __name__ == "__main__":
-    main_PACO()
+    main()

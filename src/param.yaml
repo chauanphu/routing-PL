@@ -1,23 +1,40 @@
-instance: "Bac1"
-constraints:
-  allow_early: false
-  infeasbiility_penalty: 3000
-PSO:
-  population_size: 1000
-  max_iter: 100
-  inertia_weight: 0.72984
-  cognitive_weight: 1.5
-  social_weight: 1.5
-  max_velocity: 0.5
-GA:
-  every: 5
-  enabled: true
-  mode: "worst_selection"
-  num_min: 3
-  num_max: 25
-  ps_min: 10
-  ps_max: 100
-  min_iter: 10
-  max_iter: 100
-  gamma: 10
-  beta: 15
+experiment:
+  samples:
+    # small:
+    #   instances:
+    #     - "C101_co_25.txt"
+    #     # - "R101_co_25.txt"
+    #     # - "RC101_co_25.txt"
+    #   data_dir: "data/25"
+    # medium:
+    #   instances:
+    #     - "C101_co_50.txt"
+    #     # - "R101_co_50.txt"
+    #     # - "RC101_co_50.txt"
+    #   data_dir: "data/50"
+    large:
+      instances:
+        - "C101_co_100.txt"
+        # - "R101_co_100.txt"
+        # - "RC101_co_100.txt"
+      data_dir: "data/100"
+  num_runs: 1
+  max_cores: 64
+  core_counts: [1, 8, 16, 32, 64]
+  output_dir: "output/speedup_analysis"
+  paco_params:
+    num_iterations: 50
+    num_ants: 1024
+    alpha: 1.0
+    beta: 2.0
+    evaporation_rate: 0.2
+    Q: 1.0
+    elitist_num: 50
+  saco_params:
+    num_ants: 1000
+    num_iterations: 100
+    alpha: 1.0
+    beta: 2.0
+    evaporation_rate: 0.2
+    Q: 1.0
+    elitist_num: 10

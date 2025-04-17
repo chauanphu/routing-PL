@@ -1,12 +1,16 @@
 import csv
+import itertools
 import os
+from pathlib import Path
 import time
 from statistics import mean, stdev
+import yaml
 
 from meta.solver import Problem
 from meta.ACO import PACO
+import matplotlib.pyplot as plt
 
-def run_paco_instance(problem, num_ants, batch_size, other_params):
+def run_paco_instance(problem, num_ants, batch_size, **other_params):
     """
     Runs a single PACO instance.
     Each run is executed sequentially (not in parallel) to keep the cores free for the parallel PACO internal operations.
@@ -20,7 +24,7 @@ def run_paco_instance(problem, num_ants, batch_size, other_params):
                          **other_params)
     
     start_time = time.time()
-    result = paco_instance.optimize(verbose=False)
+    result = paco_instance.optimize(verbose=True)
     end_time = time.time()
     total_runtime = end_time - start_time
 
@@ -28,8 +32,6 @@ def run_paco_instance(problem, num_ants, batch_size, other_params):
         overhead = paco_instance.overhead  # Assume PACO stores an overall overhead metric
     except AttributeError:
         overhead = None
-
-    # paco_instance.cleanup()
 
     return {
         'num_ants': num_ants,
@@ -41,99 +43,241 @@ def run_paco_instance(problem, num_ants, batch_size, other_params):
 
 def run_solver_instance(solver_class, problem, solver_params):
     """
-    Runs a single instance of a solver.
-    It creates a fresh solver instance, runs optimize() to get the best solution, and measures runtime.
+    Runs a solver (SACO or similar) instance and returns metrics.
     """
-    # Create an instance of the solver
-    solver_instance = solver_class(problem, **solver_params)
-    
+    solver = solver_class(problem, **solver_params)
     start_time = time.time()
-    # Run the optimization (assumed to return (solution, fitness, routes))
-    result = solver_instance.optimize(verbose=False)
+    result = solver.optimize(verbose=False)
     end_time = time.time()
-    runtime = end_time - start_time
-
-    # For sequential solvers, we are only interested in best_fitness and runtime.
-    best_fitness = result[1]
-    num_vehicles = len(result[2])
-    # Cleanup if the solver defines such a method (optional)
-    if hasattr(solver_instance, "cleanup"):
-        solver_instance.cleanup()
-    
+    total_runtime = end_time - start_time
     return {
-        'best_fitness': best_fitness,
-        'runtime': runtime,
-        'num_vehicles': num_vehicles
+        'best_fitness': result[1],
+        'runtime': total_runtime
     }
 
-class Experiment:
-    def __init__(self, problem, solvers_dict, num_runs=3):
-        """
-        :param problem: The common Problem instance used for all solvers.
-        :param solvers_dict: A dictionary mapping solver names to a tuple (solver_class, solver_params)
-                             where solver_class is a class inheriting from Solver and solver_params is a dict.
-                             Example:
-                             {
-                               "PACO": (PACO, {"num_ants": 1000, "batch_size": 100, "alpha": 1.0, ...}),
-                               "OtherSolver": (OtherSolver, {"param1": value, ...})
-                             }
-        :param num_runs: Number of independent runs per solver configuration.
-        """
-        self.problem = problem
-        self.solvers_dict = solvers_dict
-        self.num_runs = num_runs
-        # To store results for each solver: {solver_name: [list of run dicts]}
-        self.results = {}
+def run_sensitivity_analysis(instances, param_grid, base_params, num_runs, output_dir):
+    """
+    Runs sensitivity analysis for PACO across specified instances and parameter variations.
 
-    def run(self):
-        """
-        Runs each solver for num_runs sequentially.
-        """
-        for solver_name, (solver_class, solver_params) in self.solvers_dict.items():
-            print(f"Running solver: {solver_name}")
-            solver_results = []
-            for run in range(self.num_runs):
-                print(f"  Run {run+1}/{self.num_runs}...", end="")
-                res = run_solver_instance(solver_class, self.problem, solver_params)
-                solver_results.append(res)
-                print(f" Best Fitness: {res['best_fitness']}\t| Runtime: {res['runtime']:.2f}s\t| Number of Vehicles: {res['num_vehicles']}")
-            self.results[solver_name] = solver_results
-        return self.results
+    Args:
+        instances (dict): Dictionary mapping instance scale/type to list of filenames.
+                          e.g., {'small_C': ['C101_co_25.txt'], 'large_R': ['R101_co_100.txt']}
+        param_grid (dict): Dictionary where keys are parameter names to vary ('num_ants', 'alpha', etc.)
+                           and values are lists of values to test for that parameter.
+        base_params (dict): Dictionary of fixed PACO parameters.
+        num_runs (int): Number of times to run each configuration.
+        output_dir (str): Directory to save the results CSV.
+    """
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    results_file = os.path.join(output_dir, 'paco_sensitivity_results.csv')
+    
+    # Prepare header for CSV
+    param_names = list(param_grid.keys())
+    header = ['instance_scale', 'instance_type', 'instance_name'] + param_names + ['run', 'best_fitness', 'runtime', 'overhead']
+    
+    # Generate all parameter combinations to test
+    varying_param_values = [param_grid[k] for k in param_names]
+    param_combinations = list(itertools.product(*varying_param_values))
 
-    def write_csv_report(self, problem_name=None):
-        """
-        Generates a CSV report for each solver.
-        Each CSV file is named "results_<solver_name>.csv" and contains columns:
-        'run', 'best_fitness', 'num_vehicles', 'runtime'
-        """
-        for solver_name, runs in self.results.items():
-            filename = f"output/results/100/{problem_name}_{solver_name}.csv"
-            with open(filename, mode='w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(["run", "best_fitness", "num_vehicles", "runtime"])
-                for i, res in enumerate(runs, start=1):
-                    writer.writerow([i, res['best_fitness'], res['num_vehicles'], res['runtime']])
-            print(f"Report for {solver_name} written to: {filename}")
+    print(f"Starting PACO Sensitivity Analysis. Results will be saved to: {results_file}")
+    print(f"Base parameters: {base_params}")
+    print(f"Varying parameters: {param_grid}")
+    print(f"Number of runs per config: {num_runs}")
 
-    def aggregate_results(self, solver_name):
-        """
-        Aggregates the results for a specific solver.
-        :param solver_name: The name of the solver (as used in solvers_dict).
-        :return: A dictionary with aggregated values (mean and stdev) for best_fitness and runtime.
-        """
-        runs = self.results.get(solver_name, [])
-        if not runs:
-            return None
-        fitness_vals = [res['best_fitness'] for res in runs]
-        runtime_vals = [res['runtime'] for res in runs]
-        summary = {
-            'avg_best_fitness': mean(fitness_vals),
-            'std_best_fitness': stdev(fitness_vals) if len(fitness_vals) > 1 else 0,
-            'avg_runtime': mean(runtime_vals),
-            'std_runtime': stdev(runtime_vals) if len(runtime_vals) > 1 else 0
-        }
-        return summary
+    with open(results_file, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
 
+        for scale_type, instance_files in instances.items():
+            scale, type_ = scale_type.split('_') # e.g., 'small_C' -> 'small', 'C'
+            for instance_name in instance_files:
+                instance_path = f"data/{scale}/{instance_name}"
+                print(f"\n--- Loading Instance: {instance_path} ---")
+                try:
+                    problem = Problem()
+                    problem.load_data(instance_path)
+                except FileNotFoundError:
+                    print(f"Error: Instance file not found at {instance_path}. Skipping.")
+                    continue
+                
+                print(f"--- Running Experiments for {instance_name} ---")
+                for combo in param_combinations:
+                    current_params = base_params.copy()
+                    param_combo_dict = {}
+                    for i, param_name in enumerate(param_names):
+                        current_params[param_name] = combo[i]
+                        param_combo_dict[param_name] = combo[i]
+                    
+                    print(f"  Config: {param_combo_dict}")
+                    
+                    for run in range(num_runs):
+                        print(f"    Run {run + 1}/{num_runs}...", end="")
+                        try:
+                            # Ensure all necessary params are passed
+                            run_result = run_paco_instance(
+                                problem=problem,
+                                num_ants=current_params.get('num_ants', 1000), # Provide defaults if not varied
+                                batch_size=current_params.get('batch_size', 100),
+                                num_iterations=current_params.get('num_iterations', 100),
+                                alpha=current_params.get('alpha', 1.0),
+                                beta=current_params.get('beta', 2.0),
+                                evaporation_rate=current_params.get('evaporation_rate', 0.1),
+                                Q=current_params.get('Q', 1.0),
+                                elitist_num=current_params.get('elitist_num', 10)
+                            )
+                            
+                            # Prepare row for CSV
+                            row_data = [scale, type_, instance_name] + list(combo) + \
+                                       [run + 1, run_result['best_fitness'], run_result['runtime'], run_result['overhead']]
+                            writer.writerow(row_data)
+                            f.flush() # Write to file periodically
+                            print(f" Fitness: {run_result['best_fitness']:.2f}, Time: {run_result['runtime']:.2f}s")
+                        
+                        except Exception as e:
+                            print(f" Error during run: {e}")
+                            # Optionally write an error row
+                            error_row = [scale, type_, instance_name] + list(combo) + [run + 1, 'ERROR', str(e), None]
+                            writer.writerow(error_row)
+                            f.flush()
+
+    print("\nSensitivity Analysis Complete.")
+
+def speed_up(config_path='param.yaml'):
+    """
+    Runs PACO with varying core counts, measures runtime, computes speedup and efficiency.
+    Results are saved to output_dir/paco_scaling_vs_cores.csv.
+    Also exports line charts for speedup and efficiency.
+    """
+
+    # Load config
+    with open(config_path) as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    exp_config = config['experiment']
+    core_counts = exp_config['core_counts']
+    output_dir = exp_config['output_dir']
+    paco_params = exp_config['paco_params']
+    samples = exp_config['samples']
+    num_runs = exp_config.get('num_runs', 1)
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    results_file = os.path.join(output_dir, 'paco_scaling_vs_cores.csv')
+    header = ['instance_scale', 'instance_name', 'core_count', 'num_ants', 'batch_size', 'runtime', 'speedup', 'efficiency']
+
+    print(f"Starting PACO scaling vs core analysis. Results will be saved to: {results_file}")
+    with open(results_file, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        for scale_name, scale_config in samples.items():
+            instance_files = scale_config['instances']
+            data_dir = scale_config['data_dir']
+            for instance_name in instance_files:
+                instance_path = os.path.join(data_dir, instance_name)
+                print(f"  Loading Instance: {instance_path}")
+                try:
+                    problem = Problem()
+                    problem.load_data(instance_path)
+                except Exception as e:
+                    print(f"    Error loading instance {instance_path}: {e}. Skipping.")
+                    continue
+                runtimes = []
+                # For plotting
+                speedups = []
+                efficiencies = []
+                for core in core_counts:
+                    num_ants = paco_params['num_ants']
+                    batch_size = num_ants // core
+                    paco_args = dict(paco_params)
+                    # Set process pool size via environment variable
+                    os.environ['OMP_NUM_THREADS'] = str(core)
+                    os.environ['NUMEXPR_MAX_THREADS'] = str(core)
+                    os.environ['MKL_NUM_THREADS'] = str(core)
+                    print(f"    Running PACO with {core} cores, num_ants={num_ants}, batch_size={batch_size}...")
+                    result = run_paco_instance(
+                        problem=problem,
+                        batch_size=batch_size,
+                        **paco_args
+                    )
+                    runtimes.append(result['runtime'])
+                    print(f"    Cores={core}, num_ants={num_ants}, Time={result['runtime']:.2f}s")
+                # Compute speedup and efficiency
+                base_runtime = runtimes[0]
+                for idx, core in enumerate(core_counts):
+                    speedup = base_runtime / runtimes[idx] if runtimes[idx] > 0 else float('nan')
+                    efficiency = speedup / core if core > 0 else float('nan')
+                    speedups.append(speedup)
+                    efficiencies.append(efficiency)
+                    writer.writerow([
+                        scale_name, instance_name, core, core * batch_size, batch_size, runtimes[idx], speedup, efficiency
+                    ])
+                    f.flush()
+                # Plot and save line charts for this instance
+                plt.figure()
+                plt.plot(core_counts, speedups, marker='o')
+                plt.xlabel('Core Count')
+                plt.ylabel('Speedup S(p)')
+                plt.title(f'Speedup vs Core Count ({scale_name}, {instance_name})')
+                plt.grid(True)
+                plt.savefig(os.path.join(output_dir, f'speedup_{scale_name}_{instance_name}.png'))
+                plt.close()
+
+                plt.figure()
+                plt.plot(core_counts, efficiencies, marker='o')
+                plt.xlabel('Core Count')
+                plt.ylabel('Efficiency E(p)')
+                plt.title(f'Efficiency vs Core Count ({scale_name}, {instance_name})')
+                plt.grid(True)
+                plt.savefig(os.path.join(output_dir, f'efficiency_{scale_name}_{instance_name}.png'))
+                plt.close()
+    print("\nPACO scaling vs core analysis complete. Line charts exported.")
+
+def paco_sensitivity():
+    # 1. Define Instances to Test
+    instances_to_test = {
+        # Small Scale (25 nodes)
+        '25_C': ['C101_co_25.txt', 'C201_co_25.txt'],
+        '25_R': ['R101_co_25.txt', 'R201_co_25.txt'],
+        '25_RC': ['RC101_co_25.txt', 'RC201_co_25.txt'],
+        # Medium Scale (50 nodes) - Sampled
+        '50_C': ['C101_co_50.txt'],
+        '50_R': ['R101_co_50.txt'],
+        '50_RC': ['RC101_co_50.txt'],
+        # Large Scale (100 nodes) - Sampled
+        '100_C': ['C101_co_100.txt'],
+        '100_R': ['R101_co_100.txt'],
+        '100_RC': ['RC101_co_100.txt'],
+    }
+
+    # 2. Define Parameter Grid for Sensitivity Analysis
+    parameter_grid = {
+        'num_ants': [200, 500, 2000],          # Vary number of ants
+        'evaporation_rate': [0.1, 0.2, 0.5],    # Vary evaporation rate
+        'alpha': [0.5, 1.0, 2.0],               # Vary alpha
+        'beta': [0.5, 1.0, 2.0],                 # Vary beta
+        'batch_size': [10, 20, 50]      # Fixed batch size
+    }
+
+    # 3. Define Base (Fixed) Parameters for PACO
+    base_parameters = {
+        'num_iterations': 100,  # Fixed number of iterations
+        'Q': 1.0,               # Fixed Q
+        'elitist_num': 10       # Fixed number of elitist ants
+        # Note: The parameters defined in parameter_grid will override these during the loops
+    }
+
+    # 4. Set Number of Runs for Averaging
+    number_of_runs = 5 # Run each configuration 5 times
+
+    # 5. Define Output Directory
+    output_directory = "output/sensitivity_analysis"
+
+    # 6. Run the Analysis
+    run_sensitivity_analysis(
+        instances=instances_to_test,
+        param_grid=parameter_grid,
+        base_params=base_parameters,
+        num_runs=number_of_runs,
+        output_dir=output_directory
+    )
 
 class ParallelExperiment:
     def __init__(self, problem, other_params=None, num_runs=3):
@@ -254,41 +398,7 @@ class ParallelExperiment:
                                  metrics['avg_overhead'],
                                  metrics['std_overhead']])
         print("Aggregated report written to:", filename)
-
-
-def main(INSTANCE):
-    # from problem_module import Problem
-    # Initialize your problem instance appropriately.
-    instance = Problem()
-    instance.load_data(f"data/100/{INSTANCE}.txt")
-
-    extra_params = {'alpha': 1.0, 'beta': 1.0, 'evaporation_rate': 0.1, 'Q': 1.0, 'num_iterations': 100}
-
-    experiment = ParallelExperiment(problem=instance,
-                                    other_params=extra_params,
-                                    num_runs=10)
-
-    # # Experiment 1: Vary number of ants (with fixed batch size)
-    # ants_values = [100, 200, 500, 1000]
-    # fixed_batch_size = 100
-    # results_ants = experiment.run_experiment_varying_ants(fixed_batch_size=fixed_batch_size,
-    #                                                        ants_values=ants_values)
-    # experiment.write_csv_report(f"output/experiment/{INSTANCE}_test1.csv")
-    # summary_ants = experiment.aggregate_results(param_name='num_ants')
-    # experiment.write_aggregated_report(summary_ants, f"output/experiment/{INSTANCE}_test1_summary.csv", param_name='num_ants')
-
-    # # Experiment 2: Vary batch size (with fixed number of ants)
-    # batch_sizes = [20, 50, 100, 200, 500]
-    # fixed_num_ants = 1000
-    # results_batch = experiment.run_experiment_varying_batch_size(fixed_num_ants=fixed_num_ants,
-    #                                                              batch_sizes=batch_sizes)
-    # experiment.write_csv_report(f"output/experiment/{INSTANCE}_test2.csv")
-    # summary_batch = experiment.aggregate_results(param_name='batch_size')
-    # experiment.write_aggregated_report(summary_batch, f"output/experiment/{INSTANCE}_test2_summary.csv", param_name='batch_size')
-
-    ## Experiment 3: Vary number of elite ants (with fixed batch size)
-
-    
+          
 # Example usage:
 if __name__ == '__main__':
-    main("RC101_co_100")
+    speed_up()
