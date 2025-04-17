@@ -26,16 +26,71 @@ def export_pheromones_heatmap(pheromones, filename="pheromones_heatmap.png"):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
     
     # Plot direct delivery layer (mode 0)
-    im1 = ax1.imshow(pheromones[:, :, 0], cmap='hot', interpolation='nearest')
+    im1 = ax1.imshow(pheromones[:, :, 0], cmap='viridis', interpolation='nearest')
     ax1.set_title(f"Home Delivery Pheromones")
     plt.colorbar(im1, ax=ax1)
     
     # Plot locker delivery layer (mode 1)
-    im2 = ax2.imshow(pheromones[:, :, 1], cmap='hot', interpolation='nearest')
+    im2 = ax2.imshow(pheromones[:, :, 1], cmap='viridis', interpolation='nearest')
     ax2.set_title(f"Locker Delivery Pheromones")
     plt.colorbar(im2, ax=ax2)
     
     plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
+
+def export_pheromones_3d(pheromones, filename="pheromones_3d.png", threshold=0.01):
+    """
+    Visualizes the 3D pheromone matrix as a 3D scatter plot.
+    Each point represents a pheromone value between two nodes for a specific delivery mode.
+    Color intensity indicates the pheromone strength.
+
+    Args:
+        pheromones: 3D numpy array of shape (n+1, n+1, 2).
+        filename: String for the output image file.
+        threshold: Minimum pheromone value to plot (to reduce clutter).
+    """
+    n_plus_1 = pheromones.shape[0]
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    x_coords, y_coords, z_coords, colors = [], [], [], []
+
+    # Iterate through the pheromone matrix
+    for i in range(n_plus_1):
+        for j in range(n_plus_1):
+            if i == j: continue # Skip self-loops for clarity
+            for k in range(pheromones.shape[2]): # Iterate through delivery modes (0 and 1)
+                value = pheromones[i, j, k]
+                if value >= threshold:
+                    x_coords.append(i)
+                    y_coords.append(j)
+                    z_coords.append(k) # k is 0 for Home, 1 for Locker
+                    colors.append(value)
+
+    # Create the scatter plot
+    sc = ax.scatter(x_coords, y_coords, z_coords, c=colors, cmap='viridis', marker='o', alpha=0.6)
+
+    # Set labels and title
+    ax.set_xlabel("From Node Index")
+    ax.set_ylabel("To Node Index")
+    ax.set_zlabel("Delivery Mode")
+    ax.set_title("3D Pheromone Visualization")
+
+    # Customize Z-axis ticks
+    ax.set_zticks([0, 1])
+    ax.set_zticklabels(['Home', 'Locker'])
+
+    # Add a color bar
+    cbar = plt.colorbar(sc)
+    cbar.set_label('Pheromone Intensity')
+
+    # Set axis limits for better visualization if needed
+    ax.set_xlim(0, n_plus_1 -1)
+    ax.set_ylim(0, n_plus_1 -1)
+    # Adjust Z limits so that 0 (Home) is at the base
+    ax.set_zlim(0, 1.5) # Change lower limit from -0.5 to 0
+
     plt.savefig(filename)
     plt.close()
 
@@ -613,11 +668,12 @@ def main_PACO():
     instance = Problem()
     instance.load_data("data/50/C101_co_50.txt")
     # aco = SACO(instance, num_ants=1000, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.1, Q=1.0)
-    aco = PACO(instance, num_ants=3000, batch_size=100, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.2, Q=1.0, elitist_num=5)
+    aco = PACO(instance, num_ants=1000, batch_size=50, num_iterations=50, alpha=1.0, beta=1.0, evaporation_rate=0.2, Q=1.0, elitist_num=5)
     import timeit
     # export_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
-    # export_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
+    export_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
+    export_pheromones_3d(aco.shared_pheromones, filename="output/final_pheromones_3d.png")
     aco.cleanup()
     print(f"Best Fitness: {aco.global_best_fitness}")
     print(f"Execution Time: {run_time:.2f} seconds")
