@@ -575,7 +575,8 @@ class Solver:
         plt.show()
         # Save the plot to a file
         plt.savefig("output/fitness_history.png")
-
+        print("Fitness history plot saved as output/fitness_history.png")
+        
     def plot_routes(self, routes: list[list[Node]] = None) -> None:
         """
         Plot the routes for the VRP.

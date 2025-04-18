@@ -1,0 +1,12 @@
+experiment:
+  instance: "data/50/C101_co_50.txt"
+  num_ants: 256
+  num_core: 32
+  elitist_num: 20
+  num_iterations: 50
+  alpha: [0.25, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+  beta: [0.25, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+  Q: 2
+  evaporation_rate: 0.25
+  num_runs: 5
+  output_dir: "output/sensitivity_analysis"

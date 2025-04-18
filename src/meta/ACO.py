@@ -564,8 +564,7 @@ class PACO(Solver):
             ant_compute_time = worker_ant_end - worker_ant_start
             # Append result with compute time for overhead estimation
             results.append((transitions, fitness, final_route, routes, ant_compute_time))
-        # select elitist
-        shm.close()  # Detach from shared memory
+        shm.close()  # Only close, do not unlink in worker
         return results
     
     def optimize(self, verbose=True):
@@ -576,7 +575,6 @@ class PACO(Solver):
         """
         pheromone_shape = self.shared_pheromones.shape
         pheromone_dtype = self.shared_pheromones.dtype
-
         try:
             with ProcessPoolExecutor() as executor:
                 for iteration in range(self.num_iterations):
@@ -610,54 +608,55 @@ class PACO(Solver):
                     # Update pheromones using the solutions from all ants.
                     # We assume each task returns (transitions, fitness, ..., ...)
                     self.update_pheromones([(transitions, fitness) for (transitions, fitness, _, _, _) in solutions])
-                    
                     # Update global best.
                     for (transitions, fitness, final_route, routes, _) in solutions:
                         if fitness < self.global_best_fitness:
                             self.global_best_fitness = fitness
                             self.global_best_solution = final_route
                             self.global_best_routes = routes
-
                     # Record fitness history.
                     self.fitness_history.append(self.global_best_fitness)
-                    
                     iter_end = time.time()
                     avg_overhead = sum(overheads) / len(overheads) if overheads else 0
                     overhead_per_ant = avg_overhead / self.batch_size
                     self.overhead_history.append(overhead_per_ant)
-                    
                     if verbose:
                         print(f"Iteration {iteration+1}/{self.num_iterations} | Best Fitness: {self.global_best_fitness:.2f} | Iteration Time: {iter_end - iter_start:.2f}s")
-        except:
+        except Exception as e:
             self.cleanup()
-
+            raise e
+        finally:
+            self.cleanup()
         # Aggregate overall overhead.
         if self.overhead_history:
             self.overhead = mean(self.overhead_history)
         else:
             self.overhead = None
-
         return self.global_best_solution, self.global_best_fitness, self.global_best_routes
 
     def cleanup(self):
         """
         Cleans up shared memory resources.
         """
-        try:
-            self.pheromone_shm.close()
-            self.pheromone_shm.unlink()
-        except Exception as e:
-            print("Cleanup error:", e)
+        if hasattr(self, 'pheromone_shm') and self.pheromone_shm is not None:
+            try:
+                self.pheromone_shm.close()
+                self.pheromone_shm.unlink()
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                print("Cleanup error:", e)
+            self.pheromone_shm = None
 
 def main():
     instance = Problem()
-    instance.load_data("data/50/C101_co_50.txt")
-    aco = PACO(instance, num_ants=1000, batch_size=50, num_iterations=50, alpha=1.0, beta=1.0, evaporation_rate=0.2, Q=1.0, elitist_num=5)
+    instance.load_data("data/100/C101_co_100.txt")
+    aco = PACO(instance, num_ants=3200, batch_size=3200 // 64, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.4, Q=1.0, elitist_num=10)
     import timeit
     # plot_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
-    plot_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
-    plot_pheromones_3d(aco.shared_pheromones, filename="output/final_pheromones_3d.png")
+    # plot_pheromones_heatmap(aco.shared_pheromones, filename="output/final_pheromones.png")
+    # plot_pheromones_3d(aco.shared_pheromones, filename="output/final_pheromones_3d.png")
     aco.cleanup()
     print(f"Best Fitness: {aco.global_best_fitness}")
     print(f"Execution Time: {run_time:.2f} seconds")
