@@ -57,7 +57,7 @@ def run_solver_instance(solver_class, problem, solver_params):
         'runtime': total_runtime
     }
 
-def speed_up(config_path='param.yaml'):
+def speed_up(config_path='speedup.yaml'):
     """
     Runs PACO with varying core counts, measures runtime, computes speedup and efficiency.
     Results are saved to output_dir/paco_scaling_vs_cores.csv.
@@ -70,12 +70,10 @@ def speed_up(config_path='param.yaml'):
     exp_config = config['experiment']
     core_counts = exp_config['core_counts']
     output_dir = exp_config['output_dir']
-    paco_params = exp_config['paco_params']
     samples = exp_config['samples']
-    num_runs = exp_config.get('num_runs', 1)
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    results_file = os.path.join(output_dir, 'paco_scaling_vs_cores.csv')
+    results_file = os.path.join(output_dir, 'scaling_vs_cores.csv')
     header = ['instance_scale', 'instance_name', 'core_count', 'num_ants', 'batch_size', 'runtime', 'speedup', 'efficiency']
 
     print(f"Starting PACO scaling vs core analysis. Results will be saved to: {results_file}")
@@ -85,6 +83,7 @@ def speed_up(config_path='param.yaml'):
         for scale_name, scale_config in samples.items():
             instance_files = scale_config['instances']
             data_dir = scale_config['data_dir']
+            paco_params = scale_config['paco_params']
             for instance_name in instance_files:
                 instance_path = os.path.join(data_dir, instance_name)
                 print(f"  Loading Instance: {instance_path}")
@@ -366,5 +365,5 @@ def run_complete(config_path='experiment_sizes.yaml'):
 if __name__ == '__main__':
     # Choose which function to run, e.g.:
     # paco_sensitivity()
-    # speed_up()
-    run_complete('sizes.yaml')  # Ensure this uses the correct yaml file name
+    speed_up()
+    # run_complete('sizes.yaml')  # Ensure this uses the correct yaml file name

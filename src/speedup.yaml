@@ -1,0 +1,47 @@
+experiment:
+  core_counts: [1, 8, 16, 32, 64]
+  output_dir: "output/speedup_analysis"
+  samples:
+    small:
+      instances:
+        - "C101_co_25.txt"
+        # - "R101_co_25.txt"
+        # - "RC101_co_25.txt"
+      data_dir: "data/25"
+      num_runs: 1
+      paco_params:
+        num_iterations: 20
+        num_ants: 128
+        alpha: 1.0
+        beta: 2.0
+        evaporation_rate: 0.2
+        Q: 1.0
+        elitist_num: 5
+    medium:
+      instances:
+        - "C101_co_50.txt"
+        # - "R101_co_50.txt"
+        # - "RC101_co_50.txt"
+      data_dir: "data/50"
+      num_runs: 1
+      paco_params:
+        num_iterations: 30
+        num_ants: 512
+        alpha: 1.0
+        beta: 1.0
+        evaporation_rate: 0.44
+        Q: 1.0
+        elitist_num: 30
+    large:
+      instances:
+        - "C101_co_100.txt"
+      data_dir: "data/100"
+      num_runs: 1
+      paco_params:
+        num_iterations: 30
+        num_ants: 1024
+        alpha: 1.0
+        beta: 1.0
+        evaporation_rate: 0.44
+        Q: 1.0
+        elitist_num: 50
