@@ -1,12 +1,12 @@
 experiment:
-  instance: "data/50/C101_co_50.txt"
-  num_ants: 256
-  num_core: 32
-  elitist_num: 20
+  instance: "data/100/C201_co_100.txt"
+  num_ants: [128, 256, 512, 1024, 2048, 3072]
+  num_core: 64
+  elitist_num: [0.15, 0.30, 0.45, 0.6, 0.75, 0.9]
   num_iterations: 50
-  alpha: [0.25, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
-  beta: [0.25, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
-  Q: 2
-  evaporation_rate: 0.25
+  alpha: 1.0
+  beta: 1.0
+  Q: 1.25
+  evaporation_rate: 0.44
   num_runs: 5
   output_dir: "output/sensitivity_analysis"

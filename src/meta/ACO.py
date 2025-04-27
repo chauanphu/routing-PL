@@ -440,7 +440,7 @@ class SACO(Solver):
         return self.best_solution, self.global_best_fitness, self.global_best_routes
 
 class PACO(Solver):
-    def __init__(self, problem: Problem, num_ants=1000, num_iterations=100, batch_size=100, alpha=1.0, beta=2.0, evaporation_rate=0.2, Q=1.0, elitist_num= 10):
+    def __init__(self, problem: Problem, num_ants=1000, num_iterations=100, batch_size=100, alpha=1.0, beta=2.0, evaporation_rate=0.2, Q=1.0, elitist_num=0.1):
         """
         Initializes the ACO optimizer for the VRPPL problem using a 3D pheromone matrix and sets up key parameters for
         ant colony optimization with batch processing for parallel execution.
@@ -465,7 +465,7 @@ class PACO(Solver):
         self.beta = beta
         self.evaporation_rate = evaporation_rate
         self.Q = Q
-        self.num_elitist = elitist_num
+        self.num_elitist = int(num_ants * elitist_num) if elitist_num < 1 else elitist_num
         self.tau_min = 0.01
         self.tau_max = 2.0
         # n: number of customers

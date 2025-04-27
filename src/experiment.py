@@ -364,6 +364,6 @@ def run_complete(config_path='experiment_sizes.yaml'):
 # Example usage:
 if __name__ == '__main__':
     # Choose which function to run, e.g.:
-    # paco_sensitivity()
-    speed_up()
+    paco_sensitivity()
+    # speed_up()
     # run_complete('sizes.yaml')  # Ensure this uses the correct yaml file name
