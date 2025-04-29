@@ -6,7 +6,7 @@ import time
 from statistics import mean, stdev
 import yaml
 import math
-
+from tqdm import tqdm
 from meta.solver import Problem
 from meta.ACO import PACO
 import matplotlib.pyplot as plt
@@ -84,7 +84,7 @@ def speed_up(config_path='speedup.yaml'):
             instance_files = scale_config['instances']
             data_dir = scale_config['data_dir']
             paco_params = scale_config['paco_params']
-            for instance_name in instance_files:
+            for instance_name in tqdm(instance_files):
                 instance_path = os.path.join(data_dir, instance_name)
                 print(f"  Loading Instance: {instance_path}")
                 try:
@@ -361,9 +361,32 @@ def run_complete(config_path='experiment_sizes.yaml'):
 
     print("--- All Experiments Complete ---")
 
-# Example usage:
+def main_wizard():
+    print("\n==== PACO Experiment Wizard ====")
+    print("Select an experiment to run:")
+    print("1. PACO Sensitivity Analysis")
+    print("2. PACO Speedup vs Cores")
+    print("3. PACO Complete Run (by size)")
+    print("0. Exit")
+    choice = input("Enter your choice [1-3, 0 to exit]: ").strip()
+    if choice == '1':
+        default_cfg = 'sensitiviy.yaml'
+        cfg = input(f"Enter config file for sensitivity analysis [default: {default_cfg}]: ").strip() or default_cfg
+        paco_sensitivity(cfg)
+    elif choice == '2':
+        default_cfg = 'speedup.yaml'
+        cfg = input(f"Enter config file for speedup experiment [default: {default_cfg}]: ").strip() or default_cfg
+        speed_up(cfg)
+    elif choice == '3':
+        default_cfg = 'sizes.yaml'
+        cfg = input(f"Enter config file for complete run [default: {default_cfg}]: ").strip() or default_cfg
+        run_complete(cfg)
+    elif choice == '0':
+        print("Exiting wizard.")
+        return
+    else:
+        print("Invalid choice. Please try again.")
+        main_wizard()
+
 if __name__ == '__main__':
-    # Choose which function to run, e.g.:
-    paco_sensitivity()
-    # speed_up()
-    # run_complete('sizes.yaml')  # Ensure this uses the correct yaml file name
+    main_wizard()
