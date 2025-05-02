@@ -13,6 +13,7 @@ add_executable(vrppl_loader
     src/InstanceParser.cpp
     src/Solver.cpp
     src/SA.cpp
+    src/GA.cpp
 )
 
 find_package(yaml-cpp REQUIRED)
