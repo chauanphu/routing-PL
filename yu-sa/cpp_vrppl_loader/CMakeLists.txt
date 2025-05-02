@@ -14,3 +14,6 @@ add_executable(vrppl_loader
     src/Solver.cpp
     src/SA.cpp
 )
+
+find_package(yaml-cpp REQUIRED)
+target_link_libraries(vrppl_loader yaml-cpp)

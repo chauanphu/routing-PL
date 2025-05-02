@@ -81,11 +81,6 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
     return {routes, total_distance, feasible};
 }
 
-// Deprecated: now measured in construct_routes
-static double compute_objective(const VRPInstance& instance, const std::vector<std::vector<int>>& routes, bool feasible) {
-    return 0.0;
-}
-
 Solution Solver::evaluate(const VRPInstance& instance, const std::vector<int>& customer_perm, const std::unordered_map<int, int>& customer2node) {
     int n = instance.num_customers;
     std::vector<int> delivery_nodes(n);

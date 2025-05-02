@@ -39,3 +39,36 @@ Second array: 1, 27, 3, 26, 26,...
 
 Next, nearest neighborhood is performed, selects closest node according to the current node. Performed until all customers have been assigned.
 
+## Iteration
+SA will further improve the solution
+- 
+### Neighborhood moves (Only apply to the customer permutation)
+1. Swap: randomly switch the order of 2 customer nodes
+2. Insertion: randomly selects two nodes randomly and then removes one of the nodes and inserts it to another selected node position
+3. inversion: randomly selects two nodes and reverses the sequence between them (including the chosen two nodes)
+
+### Denote
+- $\sigma$: solution, including $\sigma_{best}$: best solution, $\sigma_{current}$: current solution.
+- $R$: non-improving count ($R = 0$)
+- $T$: temperature ($T = T_0$)
+- $FBS$ (FoundBestSol): binary if found new best solution ($FBS=False$)
+
+### Loop
+For each iteration $N$, N += 1:
+1. Generate random number $r \in [0,1]$.
+ - If r <= 1/3: generate local solution ($\sigma_{new}$) by swap
+ - If 1/3 < r <= 2/3: generate local solution by insertion
+ - Else: generate local solution by inversion
+
+2. If $\theta = f(\sigma_{new}) - f(\sigma_{current}) \le 0$, $\sigma_{current} <- \sigma_{new}$.
+ - Else: Generate random number $r_2 \in [0,1]$. If $r_2 < e^{-(\theta / (\beta*T))}$, $\sigma_{current} <- \sigma_{new}$.
+
+3. If $f(\sigma_{new}) - f(\sigma_{best})$, $\sigma_{best} <- \sigma_{new}$; $R=0$; $FBS=TRUE$
+
+4. If $N = I_{iter}$:
+ - $T = T * \alpha$, $N = 0$
+ - If $FBS=True$, $FBS=False$, else: $R += 1$
+ Else: Back to step 1
+
+5. If $R = N_{patience}$ or $T \le T_f$, terminate
+ Else: back to step 1
