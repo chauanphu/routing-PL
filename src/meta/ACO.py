@@ -650,8 +650,8 @@ class PACO(Solver):
 
 def main():
     instance = Problem()
-    instance.load_data("data/100/C101_co_100.txt")
-    aco = PACO(instance, num_ants=3200, batch_size=3200 // 64, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.4, Q=1.0, elitist_num=10)
+    instance.load_data("data/50/R101_co_50.txt")
+    aco = PACO(instance, num_ants=3200, batch_size=3200 // 64, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.4, Q=1.0, elitist_num=20)
     import timeit
     # plot_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)

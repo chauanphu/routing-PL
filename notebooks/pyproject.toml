@@ -10,5 +10,6 @@ dependencies = [
     "osmnx>=2.0.1",
     "pip>=25.0.1",
     "pydantic>=2.10.6",
+    "scikit-learn>=1.6.1",
     "setuptools>=75.8.0",
 ]
