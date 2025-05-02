@@ -10,6 +10,7 @@ int main(int argc, char* argv[]) {
     }
     std::string filename = argv[1];
     VRPInstance instance = InstanceParser::parse(filename);
+    instance.build_distance_matrix(); // Ensure distance matrix is built before solving
     std::cout << "Loaded instance: " << filename << std::endl;
     std::cout << "Customers: " << instance.num_customers << std::endl;
     std::cout << "Lockers: " << instance.num_lockers << std::endl;
@@ -20,6 +21,14 @@ int main(int argc, char* argv[]) {
     for (size_t i = 0; i < std::min<size_t>(instance.customers.size(), 3); ++i) {
         auto& c = instance.customers[i];
         std::cout << "Customer " << c->id << ": demand=" << c->demand << ", type=" << c->customer_type << ", loc=(" << c->x << ", " << c->y << ")" << std::endl;
+        // Print preferences if available
+        // if (c->customer_type == 2 || c->customer_type == 3) {
+        //     std::cout << "  Preferences: ";
+        //     for (int pref : instance.customer_preferences[i]) {
+        //         std::cout << pref << " ";
+        //     }
+        //     std::cout << std::endl;
+        // }
     }
     // Call the SA solver
     Solution sol = SA::solve(instance);
@@ -31,12 +40,6 @@ int main(int argc, char* argv[]) {
         for (size_t i = 0; i < sol.routes.size(); ++i) {
             std::cout << "Route " << i+1 << ": ";
             for (int nid : sol.routes[i]) std::cout << nid << " ";
-            std::cout << std::endl;
-        }
-        // Print delivery nodes if available
-        if (sol.delivery_nodes.size() == instance.num_customers) {
-            std::cout << "Delivery nodes: ";
-            for (int dn : sol.delivery_nodes) std::cout << dn << " ";
             std::cout << std::endl;
         }
     }
