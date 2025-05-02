@@ -12,4 +12,5 @@ add_executable(vrppl_loader
     src/VRPInstance.cpp
     src/InstanceParser.cpp
     src/Solver.cpp
+    src/SA.cpp
 )

@@ -1,5 +1,6 @@
 #include "InstanceParser.h"
 #include "Solver.h"
+#include "SA.h"
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -20,8 +21,8 @@ int main(int argc, char* argv[]) {
         auto& c = instance.customers[i];
         std::cout << "Customer " << c->id << ": demand=" << c->demand << ", type=" << c->customer_type << ", loc=(" << c->x << ", " << c->y << ")" << std::endl;
     }
-    // Call the pseudo-solver
-    Solution sol = Solver::solve(instance);
+    // Call the SA solver
+    Solution sol = SA::solve(instance);
     std::cout << "\nPseudo-solver result:" << std::endl;
     std::cout << "Objective value: " << sol.objective_value << std::endl;
     if (sol.routes.empty()) {
@@ -30,6 +31,12 @@ int main(int argc, char* argv[]) {
         for (size_t i = 0; i < sol.routes.size(); ++i) {
             std::cout << "Route " << i+1 << ": ";
             for (int nid : sol.routes[i]) std::cout << nid << " ";
+            std::cout << std::endl;
+        }
+        // Print delivery nodes if available
+        if (sol.delivery_nodes.size() == instance.num_customers) {
+            std::cout << "Delivery nodes: ";
+            for (int dn : sol.delivery_nodes) std::cout << dn << " ";
             std::cout << std::endl;
         }
     }
