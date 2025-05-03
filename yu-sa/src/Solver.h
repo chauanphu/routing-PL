@@ -13,7 +13,9 @@ struct Solution {
 class Solver {
 public:
     // Construct routes and compute objective given permutation and customer2node mapping
+    // Add a flag to select route construction method (default: greedy)
     static Solution evaluate(const VRPInstance& instance,
                             const std::vector<int>& customer_perm,
-                            const std::unordered_map<int, int>& customer2node);
+                            const std::unordered_map<int, int>& customer2node,
+                            bool use_delimiter = false);
 };
