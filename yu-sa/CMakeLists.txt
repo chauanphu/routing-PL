@@ -3,46 +3,26 @@ project(vrppl_loader)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Gather source files from new structure
+file(GLOB CORE_SRC src/core/*.cpp)
+file(GLOB SOLVER_SRC src/solvers/*.cpp)
+
 add_executable(vrppl_loader
     src/main.cpp
-    src/Node.cpp
-    src/Customer.cpp
-    src/Locker.cpp
-    src/Depot.cpp
-    src/VRPInstance.cpp
-    src/InstanceParser.cpp
-    src/Solver.cpp
-    src/SA.cpp
-    src/GA.cpp
-    src/ACO_TS.cpp
+    ${CORE_SRC}
+    ${SOLVER_SRC}
 )
 
 add_executable(doe
     src/doe.cpp
-    src/Node.cpp
-    src/Customer.cpp
-    src/Locker.cpp
-    src/Depot.cpp
-    src/VRPInstance.cpp
-    src/InstanceParser.cpp
-    src/Solver.cpp
-    src/SA.cpp
-    src/GA.cpp
-    src/ACO_TS.cpp
+    ${CORE_SRC}
+    ${SOLVER_SRC}
 )
 
 add_executable(test
     src/test.cpp
-    src/InstanceParser.cpp
-    src/Solver.cpp
-    src/SA.cpp
-    src/GA.cpp
-    src/ACO_TS.cpp
-    src/Customer.cpp
-    src/Locker.cpp
-    src/Depot.cpp
-    src/Node.cpp
-    src/VRPInstance.cpp
+    ${CORE_SRC}
+    ${SOLVER_SRC}
 )
 
 find_package(yaml-cpp REQUIRED)

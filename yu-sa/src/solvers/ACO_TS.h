@@ -1,5 +1,5 @@
 #pragma once
-#include "VRPInstance.h"
+#include "../core/VRPInstance.h"
 #include "Solver.h"
 #include <vector>
 #include <unordered_map>
@@ -12,6 +12,7 @@ struct ACOParams {
     double beta = 2.0;
     double rho = 0.1; // evaporation
     double Q = 1.0;
+    int stagnation_limit = 10;
     double p = 0.5; // for type-III assignment
 };
 

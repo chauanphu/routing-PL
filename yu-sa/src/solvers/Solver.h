@@ -1,5 +1,5 @@
 #pragma once
-#include "VRPInstance.h"
+#include "../core/VRPInstance.h"
 #include <vector>
 #include <unordered_map>
 
@@ -8,6 +8,7 @@ struct Solution {
     double objective_value;
     std::vector<int> delivery_nodes; // Assigned delivery node for each customer (index = customer-1)
     std::unordered_map<int, int> customer2node; // customer_id -> delivery_node_id
+    std::vector<int> customer_permutation; // (Optional) The customer permutation (with depot delimiters) used to generate this solution
 };
 
 class Solver {

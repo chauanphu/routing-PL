@@ -1,7 +1,7 @@
-#include "InstanceParser.h"
-#include "Solver.h"
-#include "SA.h"
-#include "GA.h"
+#include "core/InstanceParser.h"
+#include "solvers/Solver.h"
+#include "solvers/SA.h"
+#include "solvers/GA.h"
 #include <iostream>
 #include <yaml-cpp/yaml.h>
 #include <fstream>

@@ -158,89 +158,120 @@ static std::vector<int> aco_construct_permutation(const VRPInstance& instance, c
     return perm;
 }
 
-// Tabu Search for VRPPL (exchange, insert, 2-opt)
-static Solution tabu_search(const VRPInstance& instance, const Solution& init_sol, const ACOParams& params, std::vector<std::vector<double>>& tau, int max_iter = 100, int max_no_improve = 20) {
+// Local search on customer permutation (with depot delimiters)
+static std::vector<int> local_search_customer_permutation(const std::vector<int>& perm, std::mt19937& gen) {
+    std::vector<int> best_perm = perm;
+    int n = perm.size();
+    if (n <= 3) return perm; // nothing to do
+    // Try swap (exchange)
+    for (int i = 1; i < n - 1; ++i) {
+        if (best_perm[i] == 0) continue;
+        for (int j = i + 1; j < n - 1; ++j) {
+            if (best_perm[j] == 0) continue;
+            std::vector<int> new_perm = best_perm;
+            std::swap(new_perm[i], new_perm[j]);
+            if (new_perm != best_perm) {
+                return new_perm;
+            }
+        }
+    }
+    // Try insertion
+    for (int i = 1; i < n - 1; ++i) {
+        if (best_perm[i] == 0) continue;
+        for (int j = 1; j < n - 1; ++j) {
+            if (i == j || best_perm[j] == 0) continue;
+            std::vector<int> new_perm = best_perm;
+            int val = new_perm[i];
+            new_perm.erase(new_perm.begin() + i);
+            new_perm.insert(new_perm.begin() + j, val);
+            if (new_perm != best_perm) {
+                return new_perm;
+            }
+        }
+    }
+    // Try 2-opt (reverse a segment)
+    for (int i = 1; i < n - 2; ++i) {
+        if (best_perm[i] == 0) continue;
+        for (int j = i + 1; j < n - 1; ++j) {
+            if (best_perm[j] == 0) continue;
+            std::vector<int> new_perm = best_perm;
+            std::reverse(new_perm.begin() + i, new_perm.begin() + j + 1);
+            if (new_perm != best_perm) {
+                return new_perm;
+            }
+        }
+    }
+    return best_perm;
+}
+
+// Tabu Search for VRPPL (exchange, insert, 2-opt) on customer permutation
+// Accepts: customer permutation (with depot delimiters), customer2node, and other params
+static Solution tabu_search(const VRPInstance& instance, const std::vector<int>& init_perm, const std::unordered_map<int, int>& customer2node, const ACOParams& params, std::vector<std::vector<double>>& tau, int max_iter = 100, int max_no_improve = 20) {
     int n = instance.num_customers;
     int tabu_tenure = std::max(1, n / 2);
     std::mt19937 gen(std::random_device{}());
-    Solution best = init_sol;
-    Solution curr = init_sol;
+    std::vector<int> curr_perm = init_perm;
+    Solution best = Solver::evaluate(instance, curr_perm, customer2node, true);
+    Solution curr = best;
     int no_improve = 0;
-    // Tabu list: customer_id -> iteration when tabu expires
     std::unordered_map<int, int> tabu_list;
     for (int iter = 0; iter < max_iter && no_improve < max_no_improve; ++iter) {
         Solution best_candidate;
         best_candidate.objective_value = 1e12;
-        std::vector<int> best_move; // [type, route1, pos1, route2, pos2]
-        // 1. Exchange between routes
-        for (size_t r1 = 0; r1 < curr.routes.size(); ++r1) {
-            for (size_t i = 1; i + 1 < curr.routes[r1].size(); ++i) {
-                int cust1 = curr.routes[r1][i];
-                if (cust1 == 0) continue;
-                for (size_t r2 = 0; r2 < curr.routes.size(); ++r2) {
-                    if (r1 == r2) continue;
-                    for (size_t j = 1; j + 1 < curr.routes[r2].size(); ++j) {
-                        int cust2 = curr.routes[r2][j];
-                        if (cust2 == 0) continue;
-                        // Swap
-                        auto new_routes = curr.routes;
-                        std::swap(new_routes[r1][i], new_routes[r2][j]);
-                        // Flatten to permutation with delimiters
-                        std::vector<int> perm;
-                        for (const auto& route : new_routes) {
-                            for (int v : route) perm.push_back(v);
-                        }
-                        Solution cand = Solver::evaluate(instance, perm, curr.customer2node, true);
-                        if (cand.objective_value < best_candidate.objective_value && (tabu_list[cust1] < iter || cand.objective_value < best.objective_value)) {
-                            best_candidate = cand;
-                            best_move = {1, (int)r1, (int)i, (int)r2, (int)j};
-                        }
-                    }
+        std::vector<int> best_move; // [type, i, j, ...]
+        std::vector<int> candidate_perm;
+        // 1. Exchange (swap)
+        for (int i = 1; i < (int)curr_perm.size() - 1; ++i) {
+            if (curr_perm[i] == 0) continue;
+            for (int j = i + 1; j < (int)curr_perm.size() - 1; ++j) {
+                if (curr_perm[j] == 0) continue;
+                std::vector<int> new_perm = curr_perm;
+                std::swap(new_perm[i], new_perm[j]);
+                Solution cand = Solver::evaluate(instance, new_perm, customer2node, true);
+                int cust1 = curr_perm[i], cust2 = curr_perm[j];
+                bool is_tabu = (tabu_list[cust1] > iter) || (tabu_list[cust2] > iter);
+                bool aspiration = cand.objective_value < best.objective_value;
+                if ((cand.objective_value < best_candidate.objective_value && (!is_tabu || aspiration))) {
+                    best_candidate = cand;
+                    best_move = {1, i, j};
+                    candidate_perm = new_perm;
                 }
             }
         }
-        // 2. Insert customer from one route to another
-        for (size_t r1 = 0; r1 < curr.routes.size(); ++r1) {
-            for (size_t i = 1; i + 1 < curr.routes[r1].size(); ++i) {
-                int cust = curr.routes[r1][i];
-                if (cust == 0) continue;
-                for (size_t r2 = 0; r2 < curr.routes.size(); ++r2) {
-                    if (r1 == r2) continue;
-                    for (size_t j = 1; j < curr.routes[r2].size(); ++j) {
-                        // Insert cust from r1,i to r2,j
-                        auto new_routes = curr.routes;
-                        int val = new_routes[r1][i];
-                        new_routes[r1].erase(new_routes[r1].begin() + i);
-                        new_routes[r2].insert(new_routes[r2].begin() + j, val);
-                        // Flatten
-                        std::vector<int> perm;
-                        for (const auto& route : new_routes) {
-                            for (int v : route) perm.push_back(v);
-                        }
-                        Solution cand = Solver::evaluate(instance, perm, curr.customer2node, true);
-                        if (cand.objective_value < best_candidate.objective_value && (tabu_list[cust] < iter || cand.objective_value < best.objective_value)) {
-                            best_candidate = cand;
-                            best_move = {2, (int)r1, (int)i, (int)r2, (int)j};
-                        }
-                    }
+        // 2. Insert
+        for (int i = 1; i < (int)curr_perm.size() - 1; ++i) {
+            if (curr_perm[i] == 0) continue;
+            for (int j = 1; j < (int)curr_perm.size() - 1; ++j) {
+                if (i == j || curr_perm[j] == 0) continue;
+                std::vector<int> new_perm = curr_perm;
+                int val = new_perm[i];
+                new_perm.erase(new_perm.begin() + i);
+                new_perm.insert(new_perm.begin() + j, val);
+                Solution cand = Solver::evaluate(instance, new_perm, customer2node, true);
+                bool is_tabu = (tabu_list[val] > iter);
+                bool aspiration = cand.objective_value < best.objective_value;
+                if ((cand.objective_value < best_candidate.objective_value && (!is_tabu || aspiration))) {
+                    best_candidate = cand;
+                    best_move = {2, i, j};
+                    candidate_perm = new_perm;
                 }
             }
         }
-        // 3. 2-opt within each route
-        for (size_t r = 0; r < curr.routes.size(); ++r) {
-            for (size_t i = 1; i + 2 < curr.routes[r].size(); ++i) {
-                for (size_t j = i + 1; j + 1 < curr.routes[r].size(); ++j) {
-                    auto new_routes = curr.routes;
-                    std::reverse(new_routes[r].begin() + i, new_routes[r].begin() + j + 1);
-                    std::vector<int> perm;
-                    for (const auto& route : new_routes) {
-                        for (int v : route) perm.push_back(v);
-                    }
-                    Solution cand = Solver::evaluate(instance, perm, curr.customer2node, true);
-                    if (cand.objective_value < best_candidate.objective_value) {
-                        best_candidate = cand;
-                        best_move = {3, (int)r, (int)i, (int)j};
-                    }
+        // 3. 2-opt
+        for (int i = 1; i < (int)curr_perm.size() - 2; ++i) {
+            if (curr_perm[i] == 0) continue;
+            for (int j = i + 1; j < (int)curr_perm.size() - 1; ++j) {
+                if (curr_perm[j] == 0) continue;
+                std::vector<int> new_perm = curr_perm;
+                std::reverse(new_perm.begin() + i, new_perm.begin() + j + 1);
+                Solution cand = Solver::evaluate(instance, new_perm, customer2node, true);
+                bool is_tabu = false;
+                for (int k = i; k <= j; ++k) if (tabu_list[curr_perm[k]] > iter) is_tabu = true;
+                bool aspiration = cand.objective_value < best.objective_value;
+                if ((cand.objective_value < best_candidate.objective_value && (!is_tabu || aspiration))) {
+                    best_candidate = cand;
+                    best_move = {3, i, j};
+                    candidate_perm = new_perm;
                 }
             }
         }
@@ -249,18 +280,20 @@ static Solution tabu_search(const VRPInstance& instance, const Solution& init_so
             no_improve++;
         } else {
             no_improve = 0;
-        }
-        // Apply best move
-        if (!best_move.empty()) {
-            if (best_move[0] == 1) { // exchange
-                int r1 = best_move[1], i = best_move[2], r2 = best_move[3], j = best_move[4];
-                tabu_list[curr.routes[r1][i]] = iter + tabu_tenure;
-                tabu_list[curr.routes[r2][j]] = iter + tabu_tenure;
-            } else if (best_move[0] == 2) { // insert
-                int r1 = best_move[1], i = best_move[2];
-                tabu_list[curr.routes[r1][i]] = iter + tabu_tenure;
-            }
             curr = best_candidate;
+            curr_perm = candidate_perm;
+            // Update Tabu list
+            if (!best_move.empty()) {
+                if (best_move[0] == 1) { // swap
+                    tabu_list[curr_perm[best_move[1]]] = iter + tabu_tenure;
+                    tabu_list[curr_perm[best_move[2]]] = iter + tabu_tenure;
+                } else if (best_move[0] == 2) { // insert
+                    tabu_list[curr_perm[best_move[2]]] = iter + tabu_tenure;
+                } else if (best_move[0] == 3) { // 2-opt
+                    for (int k = best_move[1]; k <= best_move[2]; ++k)
+                        tabu_list[curr_perm[k]] = iter + tabu_tenure;
+                }
+            }
             // Pheromone update for each move
             for (const auto& route : curr.routes) {
                 for (size_t i = 1; i < route.size(); ++i) {
@@ -271,8 +304,6 @@ static Solution tabu_search(const VRPInstance& instance, const Solution& init_so
             if (curr.objective_value < best.objective_value) {
                 best = curr;
             }
-        } else {
-            break;
         }
     }
     return best;
@@ -288,7 +319,7 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOParams& params) {
     Solution best_sol;
     best_sol.objective_value = 1e12;
     int stagnation = 0;
-    int stagnation_limit = 3;
+    bool tabu_applied = false;
     for (int iter = 0; iter < params.num_iterations; ++iter) {
         std::vector<Solution> ant_sols(params.num_ants);
         for (int k = 0; k < params.num_ants; ++k) {
@@ -297,6 +328,8 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOParams& params) {
             initialize_customer2node(instance, customer2node, params.p, gen);
             // 2. Build a solution (permutation with delimiters)
             std::vector<int> perm = aco_construct_permutation(instance, customer2node, tau, params.alpha, params.beta, gen);
+            // 2.5. Local search on customer permutation
+            perm = local_search_customer_permutation(perm, gen);
             // 3. Construct solution using delimiter-based evaluation
             Solution sol = Solver::evaluate(instance, perm, customer2node, true);
             ant_sols[k] = sol;
@@ -323,12 +356,13 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOParams& params) {
             }
         }
         // Tabu Search integration
-        if (stagnation >= stagnation_limit) {
-            best_sol = tabu_search(instance, best_sol, params, tau);
+        if (!tabu_applied && stagnation >= params.stagnation_limit) {
+            std::cout << "[ACO] Stagnation detected, applying Tabu Search..." << std::endl;
+            best_sol = tabu_search(instance, best_sol.customer_permutation, best_sol.customer2node, params, tau);
             stagnation = 0;
+            tabu_applied = true;
         }
-        // Optionally print progress
-        // std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
+        std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
     }
     return best_sol;
 }
