@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "/home/aphuc/ai/workspace/routing-PL/yu-sa/cpp_vrppl_loader",
+    "cmake.sourceDirectory": "/home/aphuc/ai/workspace/routing-PL/yu-sa",
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",

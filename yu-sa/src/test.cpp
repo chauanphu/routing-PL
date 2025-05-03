@@ -3,6 +3,7 @@
 #include "solvers/SA.h"
 #include "solvers/GA.h"
 #include "solvers/ACO_TS.h"
+#include "solvers/ThreeDACO.h"
 #include <iostream>
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -18,6 +19,7 @@ struct ExperimentParams {
     SAParams sa_params;
     GAParams ga_params;
     ACOParams aco_params;
+    ThreeDACOParams paco_params;
     std::string output_csv;
     int num_runs;
     std::string data_dir;
@@ -27,7 +29,7 @@ struct ExperimentParams {
 ExperimentParams parse_params(int argc, char* argv[]) {
     if (argc < 3) {
         std::cout << "Usage: " << argv[0] << " <solver> <experiment_size> [instance_file] [params_yaml]" << std::endl;
-        std::cout << "  solver: sa (Simulated Annealing) | ga (Genetic Algorithm) | aco-ts (ACO-TS)" << std::endl;
+        std::cout << "  solver: sa (Simulated Annealing) | ga (Genetic Algorithm) | aco-ts (ACO-TS) | paco (3D ACO)" << std::endl;
         std::cout << "  experiment_size: small | medium | large" << std::endl;
         std::cout << "  instance_file: (optional) path to a single instance file" << std::endl;
         std::cout << "  params_yaml: (optional) path to params yaml file, defaults to <solver>.param.yaml" << std::endl;
@@ -76,6 +78,18 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.aco_params.rho = aco_params_node["evaporation_rate"].as<double>();
         params.aco_params.Q = aco_params_node["Q"].as<double>();
         params.aco_params.p = aco_params_node["p"].as<double>();
+    } else if (params.solver_name == "paco") {
+        auto aco_params_node = params.config[params.exp_size]["paco_params"];
+        if (!aco_params_node) {
+            std::cerr << "paco_params not found in " << params_yaml << std::endl;
+            exit(1);
+        }
+        params.paco_params.num_ants = aco_params_node["num_ants"].as<int>();
+        params.paco_params.num_iterations = aco_params_node["num_iterations"].as<int>();
+        params.paco_params.alpha = aco_params_node["alpha"].as<double>();
+        params.paco_params.beta = aco_params_node["beta"].as<double>();
+        params.paco_params.evaporation_rate = aco_params_node["evaporation_rate"].as<double>();
+        params.paco_params.Q = aco_params_node["Q"].as<double>();
     } else {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
@@ -113,6 +127,15 @@ void print_params(const ExperimentParams& params) {
         std::cout << "  evaporation_rate: " << aco_params_node["evaporation_rate"].as<double>() << std::endl;
         std::cout << "  Q: " << aco_params_node["Q"].as<double>() << std::endl;
         std::cout << "  p: " << aco_params_node["p"].as<double>() << std::endl;
+    } else if (params.solver_name == "paco") {
+        std::cout << "3D ACO Parameters:" << std::endl;
+        auto aco_params_node = params.config[params.exp_size]["paco_params"];
+        std::cout << "  num_ants: " << aco_params_node["num_ants"].as<int>() << std::endl;
+        std::cout << "  num_iterations: " << aco_params_node["num_iterations"].as<int>() << std::endl;
+        std::cout << "  alpha: " << aco_params_node["alpha"].as<double>() << std::endl;
+        std::cout << "  beta: " << aco_params_node["beta"].as<double>() << std::endl;
+        std::cout << "  evaporation_rate: " << aco_params_node["evaporation_rate"].as<double>() << std::endl;
+        std::cout << "  Q: " << aco_params_node["Q"].as<double>() << std::endl;
     }
 }
 
@@ -189,6 +212,16 @@ int main(int argc, char* argv[]) {
         aco_params.Q = aco_node["Q"].as<double>();
         aco_params.p = aco_node["p"].as<double>();
         sol = ACO_TS::solve(instance, aco_params);
+    } else if (params.solver_name == "paco") {
+        ThreeDACOParams paco_params;
+        auto paco_node = params.config[size]["paco_params"];
+        paco_params.num_ants = paco_node["num_ants"].as<int>();
+        paco_params.num_iterations = paco_node["num_iterations"].as<int>();
+        paco_params.alpha = paco_node["alpha"].as<double>();
+        paco_params.beta = paco_node["beta"].as<double>();
+        paco_params.evaporation_rate = paco_node["evaporation_rate"].as<double>();
+        paco_params.Q = paco_node["Q"].as<double>();
+        sol = ThreeDACO::solve(instance, paco_params);
     } else {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
