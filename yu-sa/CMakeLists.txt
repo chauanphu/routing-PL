@@ -14,6 +14,7 @@ add_executable(vrppl_loader
     src/Solver.cpp
     src/SA.cpp
     src/GA.cpp
+    src/ACO_TS.cpp
 )
 
 add_executable(doe
@@ -27,8 +28,24 @@ add_executable(doe
     src/Solver.cpp
     src/SA.cpp
     src/GA.cpp
+    src/ACO_TS.cpp
+)
+
+add_executable(test
+    src/test.cpp
+    src/InstanceParser.cpp
+    src/Solver.cpp
+    src/SA.cpp
+    src/GA.cpp
+    src/ACO_TS.cpp
+    src/Customer.cpp
+    src/Locker.cpp
+    src/Depot.cpp
+    src/Node.cpp
+    src/VRPInstance.cpp
 )
 
 find_package(yaml-cpp REQUIRED)
 target_link_libraries(vrppl_loader yaml-cpp)
 target_link_libraries(doe yaml-cpp)
+target_link_libraries(test yaml-cpp)

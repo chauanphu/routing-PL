@@ -52,6 +52,10 @@
         "numbers": "cpp",
         "sstream": "cpp",
         "__nullptr": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "list": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "valarray": "cpp"
     }
 }
