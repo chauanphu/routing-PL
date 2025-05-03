@@ -357,12 +357,12 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOParams& params) {
         }
         // Tabu Search integration
         if (!tabu_applied && stagnation >= params.stagnation_limit) {
-            std::cout << "[ACO] Stagnation detected, applying Tabu Search..." << std::endl;
+            // std::cout << "[ACO] Stagnation detected, applying Tabu Search..." << std::endl;
             best_sol = tabu_search(instance, best_sol.customer_permutation, best_sol.customer2node, params, tau);
             stagnation = 0;
             tabu_applied = true;
         }
-        std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
+        // std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
     }
     return best_sol;
 }

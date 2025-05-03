@@ -25,7 +25,14 @@ add_executable(test
     ${SOLVER_SRC}
 )
 
+add_executable(tune
+    src/tune.cpp
+    ${CORE_SRC}
+    ${SOLVER_SRC}
+)
+
 find_package(yaml-cpp REQUIRED)
 target_link_libraries(vrppl_loader yaml-cpp)
 target_link_libraries(doe yaml-cpp)
 target_link_libraries(test yaml-cpp)
+target_link_libraries(tune yaml-cpp)
