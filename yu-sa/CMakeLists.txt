@@ -16,5 +16,19 @@ add_executable(vrppl_loader
     src/GA.cpp
 )
 
+add_executable(doe
+    src/doe.cpp
+    src/Node.cpp
+    src/Customer.cpp
+    src/Locker.cpp
+    src/Depot.cpp
+    src/VRPInstance.cpp
+    src/InstanceParser.cpp
+    src/Solver.cpp
+    src/SA.cpp
+    src/GA.cpp
+)
+
 find_package(yaml-cpp REQUIRED)
 target_link_libraries(vrppl_loader yaml-cpp)
+target_link_libraries(doe yaml-cpp)
