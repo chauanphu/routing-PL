@@ -205,7 +205,7 @@ Solution run_solver_with_config(const std::string& solver_name, const VRPInstanc
             params.p = std::get<double>(config.at("p"));
             sol = GA::solve(instance, params);
         } else if (solver_name == "aco-ts") {
-            ACOParams params;
+            ACOTSParams params;
             params.num_ants = std::get<int>(config.at("num_ants"));
             params.num_iterations = std::get<int>(config.at("num_iterations"));
             params.alpha = std::get<double>(config.at("alpha"));

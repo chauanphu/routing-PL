@@ -1,20 +1,20 @@
 small:
-  data_dir: data/25
-  paco_params:
-    num_ants: 256
-    num_iterations: 30
-    alpha: 1.0
-    beta: 1.0
-    evaporation_rate: 0.4
-    Q: 1.0
-    stagnation_limit: 3
-    p: 0.5
+  data_dir: ../data/25/
+  aco-ts:
+    Q: 1.2807451356745072
+    alpha: 3.60589576591767
+    beta: 4.9947874738419689
+    evaporation_rate: 0.37303494855190106
+    num_ants: 50
+    num_iterations: 46
+    p: 0.1
+    stagnation_limit: 22
   num_runs: 1
   output_csv: output/solutions/small_aco_ts.csv
 
 medium:
   data_dir: data/50
-  paco_params:
+  aco-ts:
     num_ants: 512
     num_iterations: 50
     alpha: 1.0
@@ -28,7 +28,7 @@ medium:
 
 large:
   data_dir: data/100
-  paco_params:
+  aco-ts:
     num_ants: 1024
     num_iterations: 50
     alpha: 1.0

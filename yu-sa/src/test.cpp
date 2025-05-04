@@ -18,7 +18,7 @@ struct ExperimentParams {
     std::string instance_file;
     SAParams sa_params;
     GAParams ga_params;
-    ACOParams aco_params;
+    ACOTSParams aco_params;
     ThreeDACOParams paco_params;
     std::string output_csv;
     int num_runs;
@@ -202,7 +202,7 @@ int main(int argc, char* argv[]) {
     } else if (params.solver_name == "ga") {
         sol = GA::solve(instance, params.ga_params);
     } else if (params.solver_name == "aco-ts") {
-        ACOParams aco_params;
+        ACOTSParams aco_params;
         auto aco_node = params.config[size]["paco_params"];
         aco_params.num_ants = aco_node["num_ants"].as<int>();
         aco_params.num_iterations = aco_node["num_iterations"].as<int>();

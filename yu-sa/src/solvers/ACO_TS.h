@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <random>
 
-struct ACOParams {
+struct ACOTSParams {
     int num_ants = 50;
     int num_iterations = 1000;
     double alpha = 1.0;
@@ -18,5 +18,5 @@ struct ACOParams {
 
 class ACO_TS {
 public:
-    static Solution solve(const VRPInstance& instance, const ACOParams& params);
+    static Solution solve(const VRPInstance& instance, const ACOTSParams& params);
 };

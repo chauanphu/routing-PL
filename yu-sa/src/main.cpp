@@ -2,6 +2,7 @@
 #include "solvers/Solver.h"
 #include "solvers/SA.h"
 #include "solvers/GA.h"
+#include "solvers/ACO_TS.h"
 #include <iostream>
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -16,6 +17,7 @@ struct ExperimentParams {
     std::string instance_file;
     SAParams sa_params;
     GAParams ga_params;
+    ACOTSParams aco_params; // Add ACO-TS params
     std::string output_csv;
     int num_runs;
     std::string data_dir;
@@ -25,7 +27,7 @@ struct ExperimentParams {
 ExperimentParams parse_params(int argc, char* argv[]) {
     if (argc < 3) {
         std::cout << "Usage: " << argv[0] << " <solver> <experiment_size> [instance_file] [params_yaml]" << std::endl;
-        std::cout << "  solver: sa (Simulated Annealing) | ga (Genetic Algorithm)" << std::endl;
+        std::cout << "  solver: sa (Simulated Annealing) | ga (Genetic Algorithm) | aco-ts (ACO-TS)" << std::endl;
         std::cout << "  experiment_size: small | medium | large" << std::endl;
         std::cout << "  instance_file: (optional) path to a single instance file" << std::endl;
         std::cout << "  params_yaml: (optional) path to params yaml file, defaults to <solver>.param.yaml" << std::endl;
@@ -61,6 +63,20 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.ga_params.crossover_rate = ga_params_node["crossover_rate"].as<double>();
         params.ga_params.mutation_rate = ga_params_node["mutation_rate"].as<double>();
         params.ga_params.p = ga_params_node["p"].as<double>();
+    } else if (params.solver_name == "aco-ts") {
+        auto aco_params_node = params.config[params.exp_size]["aco-ts"];
+        if (!aco_params_node) {
+            std::cerr << "aco-ts not found in " << params_yaml << std::endl;
+            exit(1);
+        }
+        params.aco_params.num_ants = aco_params_node["num_ants"].as<int>();
+        params.aco_params.num_iterations = aco_params_node["num_iterations"].as<int>();
+        params.aco_params.alpha = aco_params_node["alpha"].as<double>();
+        params.aco_params.beta = aco_params_node["beta"].as<double>();
+        params.aco_params.rho = aco_params_node["evaporation_rate"].as<double>();
+        params.aco_params.Q = aco_params_node["Q"].as<double>();
+        params.aco_params.stagnation_limit = aco_params_node["stagnation_limit"] ? aco_params_node["stagnation_limit"].as<int>() : 10;
+        params.aco_params.p = aco_params_node["p"] ? aco_params_node["p"].as<double>() : 0.1;
     } else {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
@@ -120,6 +136,17 @@ void print_params(const ExperimentParams& params) {
         std::cout << "  mutation_rate: " << params.ga_params.mutation_rate << std::endl;
         std::cout << "  p: " << params.ga_params.p << std::endl;
     }
+    auto aco_params_node = params.config[params.exp_size]["aco-ts"];
+    if (aco_params_node) {
+        std::cout << "  num_ants: " << params.aco_params.num_ants << std::endl;
+        std::cout << "  num_iterations: " << params.aco_params.num_iterations << std::endl;
+        std::cout << "  alpha: " << params.aco_params.alpha << std::endl;
+        std::cout << "  beta: " << params.aco_params.beta << std::endl;
+        std::cout << "  rho: " << params.aco_params.rho << std::endl;
+        std::cout << "  Q: " << params.aco_params.Q << std::endl;
+        std::cout << "  stagnation_limit: " << params.aco_params.stagnation_limit << std::endl;
+        std::cout << "  p: " << params.aco_params.p << std::endl;
+    }
     std::cout << "  num_runs: " << params.num_runs << std::endl;
     std::cout << "  output_csv: " << params.output_csv << std::endl;
     std::cout << "  data_dir: " << params.data_dir << std::endl;
@@ -142,6 +169,8 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
                 sol = SA::solve(instance, params.sa_params);
             } else if (params.solver_name == "ga") {
                 sol = GA::solve(instance, params.ga_params);
+            } else if (params.solver_name == "aco-ts") {
+                sol = ACO_TS::solve(instance, params.aco_params);
             } else {
                 std::cerr << "Unknown solver: " << params.solver_name << std::endl;
                 exit(1);

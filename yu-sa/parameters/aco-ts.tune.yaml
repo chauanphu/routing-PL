@@ -1,9 +1,9 @@
 parameters:
   num_ants:
     type: int
-    range: [10, 100]
-    default: 20
-    step: 5
+    range: [50, 300]
+    default: 100
+    step: 50
   num_iterations:
     type: int
     range: [10, 100]
@@ -17,7 +17,7 @@ parameters:
   beta:
     type: float
     range: [1.0, 10.0]
-    default: 2.0
+    default: 1.0
     step: 0.5
   evaporation_rate: # Corresponds to rho in ACOParams
     type: float

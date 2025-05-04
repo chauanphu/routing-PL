@@ -1,9 +1,9 @@
 aco-ts:
-  Q: 1
-  alpha: 1
-  beta: 2
-  evaporation_rate: 0.10000000000000001
-  num_ants: 20
-  num_iterations: 50
+  Q: 1.2807451356745072
+  alpha: 3.60589576591767
+  beta: 4.9947874738419689
+  evaporation_rate: 0.37303494855190106
+  num_ants: 50
+  num_iterations: 46
   p: 0.10000000000000001
-  stagnation_limit: 10
+  stagnation_limit: 22

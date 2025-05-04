@@ -206,7 +206,7 @@ static std::vector<int> local_search_customer_permutation(const std::vector<int>
 
 // Tabu Search for VRPPL (exchange, insert, 2-opt) on customer permutation
 // Accepts: customer permutation (with depot delimiters), customer2node, and other params
-static Solution tabu_search(const VRPInstance& instance, const std::vector<int>& init_perm, const std::unordered_map<int, int>& customer2node, const ACOParams& params, std::vector<std::vector<double>>& tau, int max_iter = 100, int max_no_improve = 20) {
+static Solution tabu_search(const VRPInstance& instance, const std::vector<int>& init_perm, const std::unordered_map<int, int>& customer2node, const ACOTSParams& params, std::vector<std::vector<double>>& tau, int max_iter = 100, int max_no_improve = 20) {
     int n = instance.num_customers;
     int tabu_tenure = std::max(1, n / 2);
     std::mt19937 gen(std::random_device{}());
@@ -309,7 +309,7 @@ static Solution tabu_search(const VRPInstance& instance, const std::vector<int>&
     return best;
 }
 
-Solution ACO_TS::solve(const VRPInstance& instance, const ACOParams& params) {
+Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params) {
     int n = instance.num_customers;
     int m = instance.num_vehicles;
     int num_nodes = n + instance.num_lockers + 1;

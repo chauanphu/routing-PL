@@ -1,0 +1,10 @@
+small:
+  aco-ts:
+    Q: 7.9
+    alpha: 4.5
+    beta: 7.94
+    evaporation_rate: 0.27
+    num_ants: 50
+    num_iterations: 44
+    p: 0.1
+    stagnation_limit: 41
