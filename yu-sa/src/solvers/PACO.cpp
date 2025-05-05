@@ -21,139 +21,49 @@ PACOParams PACO::load_params(const std::string& filename) {
     params.p = config["p"].as<int>();
     return params;
 }
-
-// Helper: PACO construction using 3D-ACO transition probability (with delimiters)
-static std::pair<std::vector<int>, std::unordered_map<int, int>> paco_construct_permutation(const VRPInstance& instance,
+// Helper: PACO ant solution construction using 3D-ACO transition rule
+static std::pair<std::vector<int>, std::unordered_map<int, int>>
+paco_construct_solution(const VRPInstance& instance,
     const std::vector<std::vector<std::vector<double>>>& tau,
     double alpha, double beta, std::mt19937& gen) {
-
-        int n = instance.num_customers;
-    int m = instance.num_vehicles;
+    int n = instance.num_customers;
     int depot_id = 0;
     std::vector<int> unvisited;
     for (int i = 1; i <= n; ++i) unvisited.push_back(i);
     std::vector<int> perm;
-    perm.push_back(depot_id); // start at depot
-    int curr_node = depot_id;
-    int load = 0;
-    double time = 0;
-    int vehicles_used = 1;
-    int last_locker = -1;
     std::unordered_map<int, int> customer2node;
-    int step = 0;
-    while (!unvisited.empty() && vehicles_used <= m) {
-        // Build feasible neighborhood: (customer, option)
-        std::vector<std::tuple<int, int>> feasible;
-        for (int cust_id : unvisited) {
-            for (int o = 0; o < 2; ++o) {
-                int delivery_node = (o == 0) ? cust_id : 0;
-                if (cust_id-1 < 0 || cust_id-1 >= (int)instance.customers.size()) {
-                    std::string msg = "[PACO][paco_construct_permutation] cust_id-1 out of bounds: " + std::to_string(cust_id-1);
-                    std::cerr << msg << std::endl;
-                    throw std::runtime_error(msg);
-                }
-                auto c = instance.customers[cust_id-1];
-                if ((o == 0 && c->customer_type == 2) || (o == 1 && c->customer_type == 1)) continue;
-                if (o == 1) {
-                    int assigned = -1;
-                    if (!instance.customer_preferences.empty() && cust_id-1 < (int)instance.customer_preferences.size()) {
-                        for (size_t j = 0; j < instance.customer_preferences[cust_id-1].size(); ++j) {
-                            if (instance.customer_preferences[cust_id-1][j] == 1) {
-                                assigned = instance.lockers[j]->id;
-                                break;
-                            }
-                        }
-                    }
-                    if (assigned == -1 && !instance.lockers.empty()) assigned = instance.lockers[0]->id;
-                    if (assigned == -1) {
-                        std::string msg = "[PACO][paco_construct_permutation] No locker available for customer " + std::to_string(cust_id);
-                        std::cerr << msg << std::endl;
-                        throw std::runtime_error(msg);
-                    }
-                    delivery_node = assigned;
-                }
-                int demand = c->demand;
-                int early = 0, late = 0;
-                if (delivery_node <= instance.num_customers) {
-                    if (delivery_node-1 < 0 || delivery_node-1 >= (int)instance.customers.size()) {
-                        std::string msg = "[PACO][paco_construct_permutation] delivery_node-1 out of bounds (customer): " + std::to_string(delivery_node-1);
-                        std::cerr << msg << std::endl;
-                        throw std::runtime_error(msg);
-                    }
-                    auto cc = instance.customers[delivery_node-1];
-                    early = cc->early_time;
-                    late = cc->late_time;
-                } else {
-                    int locker_idx = delivery_node-1-instance.num_customers;
-                    if (locker_idx < 0 || locker_idx >= (int)instance.lockers.size()) {
-                        std::string msg = "[PACO][paco_construct_permutation] locker_idx out of bounds: " + std::to_string(locker_idx);
-                        std::cerr << msg << std::endl;
-                        throw std::runtime_error(msg);
-                    }
-                    auto l = instance.lockers[locker_idx];
-                    early = l->early_time;
-                    late = l->late_time;
-                }
-                double arr_time = time + instance.distance_matrix[curr_node][delivery_node];
-                if (o == 1 && last_locker == delivery_node) continue;
-                if (load + demand <= instance.vehicle_capacity && arr_time <= late) {
-                    feasible.emplace_back(cust_id, o);
-                }
+    int prev_index = depot_id;
+    while (!unvisited.empty()) {
+        std::vector<std::tuple<int, int, double>> candidate_options; // (j, d, value)
+        for (int j : unvisited) {
+            auto c = instance.customers[j-1];
+            std::vector<int> allowed;
+            if (c->customer_type == 1) allowed = {0};
+            else if (c->customer_type == 2) allowed = {1};
+            else allowed = {0, 1};
+            for (int d : allowed) {
+                double value = std::pow(tau[prev_index][j][d], alpha);
+                candidate_options.emplace_back(j, d, value);
             }
         }
-        if (feasible.empty()) {
-            perm.push_back(depot_id);
-            curr_node = depot_id;
-            load = 0;
-            time = 0;
-            vehicles_used++;
-            last_locker = -1;
-            continue;
-        }
+        double sum = 0.0;
+        for (auto& opt : candidate_options) sum += std::get<2>(opt);
         std::vector<double> probs;
-        double sum_prob = 0.0;
-        for (auto [cust_id, o] : feasible) {
-            int tau_j = cust_id; // Always use customer index for tau
-            int tau_i = curr_node; // Always depot or customer
-            // For locker, delivery_node is the assigned locker, but tau uses customer index
-            double tau_ijo = tau[tau_i][tau_j][o];
-            int delivery_node = (o == 0) ? cust_id : 0;
-            if (o == 1) {
-                int assigned = -1;
-                if (!instance.customer_preferences.empty() && cust_id-1 < (int)instance.customer_preferences.size()) {
-                    for (size_t j = 0; j < instance.customer_preferences[cust_id-1].size(); ++j) {
-                        if (instance.customer_preferences[cust_id-1][j] == 1) {
-                            assigned = instance.lockers[j]->id;
-                            break;
-                        }
-                    }
-                }
-                if (assigned == -1 && !instance.lockers.empty()) assigned = instance.lockers[0]->id;
-                delivery_node = assigned;
-            }
-            double eta_ijo = 1.0 / (instance.distance_matrix[curr_node][delivery_node] + 1e-6);
-            double val = std::pow(tau_ijo, alpha) * std::pow(eta_ijo, beta);
-            probs.push_back(val);
-            sum_prob += val;
-        }
-        if (probs.empty() || sum_prob == 0.0) {
-            std::cerr << "[PACO][paco_construct_permutation] No valid transition probabilities!" << std::endl;
-            break;
-        }
-        for (double& p : probs) p /= sum_prob;
+        for (auto& opt : candidate_options)
+            probs.push_back(sum > 0 ? std::get<2>(opt) / sum : 1.0 / candidate_options.size());
+        if (probs.empty()) break;
         std::discrete_distribution<> dist(probs.begin(), probs.end());
         int idx = dist(gen);
-        int next_cust, next_o;
-        std::tie(next_cust, next_o) = feasible[idx];
-        int tau_j = next_cust; // Always use customer index for tau
-        int tau_i = curr_node;
-        int delivery_node = (next_o == 0) ? next_cust : 0;
-        if (next_o == 1) {
+        int j = std::get<0>(candidate_options[idx]);
+        int d = std::get<1>(candidate_options[idx]);
+        // Locker assignment
+        int delivery_node = (d == 0) ? j : -1;
+        if (d == 1) {
             int assigned = -1;
-            if (!instance.customer_preferences.empty() && next_cust-1 < (int)instance.customer_preferences.size()) {
-                for (size_t j = 0; j < instance.customer_preferences[next_cust-1].size(); ++j) {
-                    if (instance.customer_preferences[next_cust-1][j] == 1) {
-                        assigned = instance.lockers[j]->id;
+            if (!instance.customer_preferences.empty() && j-1 < (int)instance.customer_preferences.size()) {
+                for (size_t k = 0; k < instance.customer_preferences[j-1].size(); ++k) {
+                    if (instance.customer_preferences[j-1][k] == 1) {
+                        assigned = instance.lockers[k]->id;
                         break;
                     }
                 }
@@ -161,37 +71,12 @@ static std::pair<std::vector<int>, std::unordered_map<int, int>> paco_construct_
             if (assigned == -1 && !instance.lockers.empty()) assigned = instance.lockers[0]->id;
             delivery_node = assigned;
         }
-        perm.push_back(next_cust);
-        customer2node[next_cust] = delivery_node;
-        if (next_cust-1 < 0 || next_cust-1 >= (int)instance.customers.size()) {
-            std::string msg = "[PACO][paco_construct_permutation] next_cust-1 out of bounds: " + std::to_string(next_cust-1);
-            std::cerr << msg << std::endl;
-            throw std::runtime_error(msg);
-        }
-        load += instance.customers[next_cust-1]->demand;
-        double arr_time = time + instance.distance_matrix[curr_node][delivery_node];
-        if (delivery_node <= instance.num_customers) {
-            if (delivery_node-1 < 0 || delivery_node-1 >= (int)instance.customers.size()) {
-                std::string msg = "[PACO][paco_construct_permutation] delivery_node-1 out of bounds (update time): " + std::to_string(delivery_node-1);
-                std::cerr << msg << std::endl;
-                throw std::runtime_error(msg);
-            }
-            time = std::max(arr_time, (double)instance.customers[delivery_node-1]->early_time);
-        } else {
-            int locker_idx = delivery_node-1-instance.num_customers;
-            if (locker_idx < 0 || locker_idx >= (int)instance.lockers.size()) {
-                std::string msg = "[PACO][paco_construct_permutation] locker_idx out of bounds (update time): " + std::to_string(locker_idx);
-                std::cerr << msg << std::endl;
-                throw std::runtime_error(msg);
-            }
-            time = std::max(arr_time, (double)instance.lockers[locker_idx]->early_time);
-        }
-        curr_node = tau_j; // Move to customer node for pheromone, but real delivery may be to locker
-        if (next_o == 1) last_locker = delivery_node; else last_locker = -1;
-        unvisited.erase(std::remove(unvisited.begin(), unvisited.end(), next_cust), unvisited.end());
-        ++step;
+        perm.push_back(j);
+        customer2node[j] = delivery_node;
+        prev_index = j;
+        unvisited.erase(std::remove(unvisited.begin(), unvisited.end(), j), unvisited.end());
     }
-    if (perm.back() != depot_id) perm.push_back(depot_id);
+    // Do NOT add depot at the end
     return {perm, customer2node};
 }
 
@@ -236,14 +121,13 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
             int end = (tid == p-1) ? m : start + m_p;
             std::random_device rd; std::mt19937 gen(rd() + tid);
             for (int k = start; k < end; ++k) {
-                try {
-                    auto [perm, customer2node] = paco_construct_permutation(instance, tau, params.alpha, params.beta, gen);
-                    Solution sol = Solver::evaluate(instance, perm, customer2node, true);
-                    all_solutions[k] = sol;
-                    all_objs[k] = sol.objective_value;
-                } catch (const std::exception& e) {
-                    std::cerr << "[PACO][Thread " << tid << "] Exception in ant " << k << ": " << e.what() << std::endl;
-                }
+                auto [perm, customer2node] = paco_construct_solution(instance, tau, params.alpha, params.beta, gen);
+                // Print out perm and customer2node for debugging
+
+                Solution sol = Solver::evaluate(instance, perm, customer2node, false);
+                all_solutions[k] = sol;
+                all_objs[k] = sol.objective_value;
+
             }
         }
         // std::cout << "[PACO] Finished ant construction." << std::endl;
@@ -263,17 +147,11 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
             for (size_t s = 1; s < perm.size(); ++s) {
                 int prev = perm[s-1];
                 int curr = perm[s];
-                if (prev == 0 && curr == 0) continue;
-                if (curr == 0) continue;
-                int o = (customer2node.at(curr) == curr) ? 0 : 1;
-                // if (prev < 0 || prev >= n || customer2node.at(curr) < 0 || customer2node.at(curr) >= n) {
-                //     std::cerr << "[PACO] Out-of-bounds in pheromone update: prev=" << prev << ", curr=" << curr << ", o=" << o << ", customer2node=" << customer2node.at(curr) << std::endl;
-                //     // Print size of tau
-                //     std::cerr << "[PACO] tau size: " << tau.size() << " x " << tau[0].size() << " x " << tau[0][0].size() << std::endl;
-                //     // Print out k
-                //     std::cerr << "[PACO] k=" << k << ", all_objs[k].size()=" << all_objs.size() << std::endl;
-                //     throw std::runtime_error("Out-of-bounds in pheromone update");
-                // }
+                // Skip depot nodes when updating pheromone and accessing customer2node
+                if (prev == 0 || curr == 0) continue;
+                auto it = customer2node.find(curr);
+                if (it == customer2node.end()) continue; // skip if not found
+                int o = (it->second == curr) ? 0 : 1;
                 tau[prev][curr][o] += params.Q / all_objs[k];
             }
         }
@@ -283,6 +161,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
             global_best = all_solutions[best_idx];
             global_best_obj = all_objs[best_idx];
         }
+        std::cout << "[PACO] Best solution so far: " << global_best_obj << std::endl;
     }
     std::cout << "[PACO] Done. Returning best solution." << std::endl;
     return global_best;

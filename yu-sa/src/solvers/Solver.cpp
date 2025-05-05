@@ -3,6 +3,7 @@
 #include <limits>
 #include <algorithm>
 #include <iostream>
+#include <unordered_set>
 
 // Route construction: builds routes from permutation and customer2node mapping
 struct RouteResult {
@@ -24,6 +25,8 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
     std::vector<int> route = {depot_id};
     bool feasible = true;
     double total_distance = 0.0;
+    std::unordered_set<int> visited_lockers;
+    int last_node = depot_id;
     for (int idx = 0; idx < n; ++idx) {
         int cust_id = customer_perm[idx];
         int cust_idx = cust_id - 1;
@@ -32,6 +35,7 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
         int node_idx = delivery_node;
         int arr_time = time + (int)instance.distance_matrix[curr_node][node_idx];
         int early = 0, late = 0;
+        bool is_locker = (delivery_node > instance.num_customers);
         if (delivery_node <= instance.num_customers) {
             auto c = instance.customers[delivery_node-1];
             early = c->early_time;
@@ -41,7 +45,13 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
             early = l->early_time;
             late = l->late_time;
         }
-        bool violates = (load + demand > cap) || (arr_time > late);
+        bool duplicate_locker = false;
+        if (is_locker) {
+            if (visited_lockers.count(delivery_node) && delivery_node != last_node) {
+                duplicate_locker = true;
+            }
+        }
+        bool violates = (load + demand > cap) || (arr_time > late) || duplicate_locker;
         if (violates) {
             // End current route, return to depot
             if (curr_node != depot_id) {
@@ -59,6 +69,8 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
             load = 0;
             curr_node = depot_id;
             time = 0;
+            visited_lockers.clear();
+            last_node = depot_id;
             // re-process this customer with new vehicle
             idx--;
             continue;
@@ -70,6 +82,8 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
         load += demand;
         route.push_back(delivery_node);
         curr_node = delivery_node;
+        if (is_locker) visited_lockers.insert(delivery_node);
+        last_node = delivery_node;
     }
     // End last route if not empty
     if (!route.empty() && curr_node != depot_id && feasible) {
@@ -94,6 +108,8 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
     int load = 0;
     int time = 0;
     int curr_node = depot_id;
+    std::unordered_set<int> visited_lockers;
+    int last_node = depot_id;
     for (size_t idx = 0; idx < customer_perm.size(); ++idx) {
         int node = customer_perm[idx];
         if (node == depot_id) {
@@ -116,6 +132,8 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
             load = 0;
             time = 0;
             curr_node = depot_id;
+            visited_lockers.clear();
+            last_node = depot_id;
             continue;
         }
         // Only process customer nodes (not depot)
@@ -123,6 +141,7 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
         int delivery_node = customer2node.at(cust_id);
         int demand = 0;
         int early = 0, late = 0;
+        bool is_locker = (delivery_node > instance.num_customers);
         if (delivery_node <= instance.num_customers) {
             auto c = instance.customers[delivery_node-1];
             demand = c->demand;
@@ -137,7 +156,13 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
             late = l->late_time;
         }
         int arr_time = time + (int)instance.distance_matrix[curr_node][delivery_node];
-        bool violates = (load + demand > cap) || (arr_time > late);
+        bool duplicate_locker = false;
+        if (is_locker) {
+            if (visited_lockers.count(delivery_node) && delivery_node != last_node) {
+                duplicate_locker = true;
+            }
+        }
+        bool violates = (load + demand > cap) || (arr_time > late) || duplicate_locker;
         if (violates) {
             feasible = false;
             break;
@@ -147,6 +172,8 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
         load += demand;
         route.push_back(delivery_node);
         curr_node = delivery_node;
+        if (is_locker) visited_lockers.insert(delivery_node);
+        last_node = delivery_node;
     }
     // Finalize last route if not empty and feasible
     if (!route.empty() && route.size() > 1 && feasible) {
