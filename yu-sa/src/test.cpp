@@ -230,5 +230,21 @@ int main(int argc, char* argv[]) {
     auto end = std::chrono::high_resolution_clock::now();
     double runtime = std::chrono::duration<double>(end - start).count();
     std::cout << "  Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
+    // Print routes and customer permutation
+    std::cout << "Routes:" << std::endl;
+    for (size_t i = 0; i < sol.routes.size(); ++i) {
+        std::cout << "  Route " << i+1 << ": ";
+        for (size_t j = 0; j < sol.routes[i].size(); ++j) {
+            std::cout << sol.routes[i][j];
+            if (j + 1 < sol.routes[i].size()) std::cout << " -> ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "Customer permutation: ";
+    for (size_t i = 0; i < sol.customer_permutation.size(); ++i) {
+        std::cout << sol.customer_permutation[i];
+        if (i + 1 < sol.customer_permutation.size()) std::cout << ", ";
+    }
+    std::cout << std::endl;
     return 0;
 }

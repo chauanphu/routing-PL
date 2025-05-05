@@ -28,7 +28,11 @@ Based on the instance description in `VRPPL.prompt.md`, start to implement the V
  - This insertion process continues until adding any remaining demand would violate either the vehicle’s capacity or the prescribed time windows. 
  - At that point, the route is deemed saturated, and we initiate a new route by resetting both load and time, modeling parallel vehicle deployments.
 
-- To streamline bundled deliveries to the same locker, any consecutive demands for that locker are aggregated into a single, larger demand (Figure \ref{fig:vrp-example}). However, revisits to the same locker after servicing an intervening location are treated as violations and hence new vehicle will be deployed. Finally, if unsatisfied demands remain once all vehicles have been deployed, the overall solution is declared infeasible.
+## Locker bundled.
+- To streamline bundled deliveries to the same locker, any consecutive demands for that locker are aggregated into a single, larger demand. - However, revisits to the same locker after servicing an intervening location are treated as violations and hence new vehicle will be deployed. For example:
+ - (Feasbile): Route 1 [0,1,27,27,27,2] is treated as [0,27,2] for distance and time update.
+ - (Infeasible) Route 2 [0,1,27,27,3,27] is infeasible due to revisit locker 27 even though the vehicle has moved to node 3.
+- Finally, if unsatisfied demands remain once all vehicles have been deployed, the overall solution is declared infeasible.
 
 # 3D-ACO
 
@@ -65,12 +69,15 @@ Based on the instance description in `VRPPL.prompt.md`, start to implement the V
 \end{equation}
 
 3. Transitional probability:
-\begin{equation}
+$$
 \Delta\tau^{(k)}_{ijo} =
 \begin{cases}
 \displaystyle\frac{Q}{L^{(k)}}, & \text{if } (i,j,o) \in \text{solution path of } k \\
 0, & \text{otherwise}
-\end{cases}
+$$
+
+1. At the current node $i$, flatten the matrix (j,o) to 1D vector j * o.
+2. 
 
 \end{equation}
 \begin{equation}
