@@ -1,5 +1,5 @@
 small:
-  data_dir: ../data/25/
+  data_dir: data/25/
   aco-ts:
     Q: 1.2807451356745072
     alpha: 3.60589576591767
@@ -15,21 +15,21 @@ small:
 medium:
   data_dir: data/50
   aco-ts:
-    num_ants: 512
+    Q: 7.9
+    alpha: 4.5
+    beta: 7.94
+    evaporation_rate: 0.27
+    num_ants: 500
     num_iterations: 50
-    alpha: 1.0
-    beta: 1.0
-    evaporation_rate: 0.4
-    Q: 1.0
-    stagnation_limit: 10
-    p: 0.3
-  num_runs: 1
+    p: 0.1
+    stagnation_limit: 40
+  num_runs: 5
   output_csv: output/solutions/medium_aco_ts.csv
 
 large:
   data_dir: data/100
   aco-ts:
-    num_ants: 1024
+    num_ants: 1000
     num_iterations: 50
     alpha: 1.0
     beta: 1.0

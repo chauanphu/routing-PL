@@ -37,7 +37,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
     params.solver_name = argv[1];
     params.exp_size = argv[2];
     params.instance_file = (argc >= 4) ? argv[3] : "";
-    std::string params_yaml = (argc >= 5) ? argv[4] : ("../" + params.solver_name + ".param.yaml");
+    std::string params_yaml = (argc >= 5) ? argv[4] : (params.solver_name + ".param.yaml");
     params.config = YAML::LoadFile(params_yaml);
     if (!params.config[params.exp_size]) {
         std::cerr << "Experiment size '" << params.exp_size << "' not found in " << params_yaml << std::endl;
@@ -81,7 +81,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
     }
-    params.output_csv = "../" + params.config[params.exp_size]["output_csv"].as<std::string>();
+    params.output_csv = params.config[params.exp_size]["output_csv"].as<std::string>();
     params.num_runs = params.config[params.exp_size]["num_runs"].as<int>();
     params.data_dir = params.config[params.exp_size]["data_dir"].as<std::string>();
     return params;
@@ -89,55 +89,55 @@ ExperimentParams parse_params(int argc, char* argv[]) {
 
 std::vector<std::string> load_instance_files(const ExperimentParams& params) {
     std::vector<std::string> instance_files;
-    if (!params.instance_file.empty()) {
-        instance_files.push_back(params.instance_file);
-    } else {
-        for (const auto& entry : std::filesystem::directory_iterator("../" + params.data_dir)) {
-            if (entry.is_regular_file()) {
-                instance_files.push_back(entry.path().string());
-            }
+    std::string data_dir = params.data_dir;
+    for (const auto& entry : std::filesystem::directory_iterator(data_dir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".txt") {
+            instance_files.push_back(entry.path().string());
         }
-        std::sort(instance_files.begin(), instance_files.end(), [](const std::string& a, const std::string& b) {
-            auto get_type = [](const std::string& name) {
-                if (name.find("RC") != std::string::npos) return 2;
-                if (name.find("R") != std::string::npos) return 1;
-                return 0; // C
-            };
-            auto get_num = [](const std::string& name) {
-                size_t start = name.find_first_of("0123456789");
-                size_t end = name.find_first_not_of("0123456789", start);
-                return std::stoi(name.substr(start, end - start));
-            };
-            int type_a = get_type(a);
-            int type_b = get_type(b);
-            if (type_a != type_b) return type_a < type_b;
-            int num_a = get_num(a);
-            int num_b = get_num(b);
-            return num_a < num_b;
-        });
+    }
+    std::sort(instance_files.begin(), instance_files.end(), [](const std::string& a, const std::string& b) {
+        auto get_type = [](const std::string& name) {
+            if (name.find("RC") != std::string::npos) return 2;
+            if (name.find("R") != std::string::npos) return 1;
+            return 0; // C
+        };
+        auto get_num = [](const std::string& name) {
+            size_t start = name.find_first_of("0123456789");
+            size_t end = name.find_first_not_of("0123456789", start);
+            return std::stoi(name.substr(start, end - start));
+        };
+        int type_a = get_type(a);
+        int type_b = get_type(b);
+        if (type_a != type_b) return type_a < type_b;
+        int num_a = get_num(a);
+        int num_b = get_num(b);
+        return num_a < num_b;
+    });
+    // Print all loaded instance files
+    std::cout << "Loaded instance files (" << instance_files.size() << "):" << std::endl;
+    for (const auto& f : instance_files) {
+        std::cout << "  " << std::filesystem::path(f).filename().string() << std::endl;
     }
     return instance_files;
 }
 
 void print_params(const ExperimentParams& params) {
     std::cout << "Loaded parameters for experiment size: " << params.exp_size << std::endl;
-    std::cout << "  max_iter: " << params.sa_params.max_iter << std::endl;
-    std::cout << "  T0: " << params.sa_params.T0 << std::endl;
-    std::cout << "  Tf: " << params.sa_params.Tf << std::endl;
-    std::cout << "  alpha: " << params.sa_params.alpha << std::endl;
-    std::cout << "  beta: " << params.sa_params.beta << std::endl;
-    std::cout << "  patience: " << params.sa_params.patience << std::endl;
-    std::cout << "  p: " << params.sa_params.p << std::endl;
-    auto ga_params_node = params.config[params.exp_size]["ga_params"];
-    if (ga_params_node) {
+    if (params.solver_name == "sa") {
+        std::cout << "  max_iter: " << params.sa_params.max_iter << std::endl;
+        std::cout << "  T0: " << params.sa_params.T0 << std::endl;
+        std::cout << "  Tf: " << params.sa_params.Tf << std::endl;
+        std::cout << "  alpha: " << params.sa_params.alpha << std::endl;
+        std::cout << "  beta: " << params.sa_params.beta << std::endl;
+        std::cout << "  patience: " << params.sa_params.patience << std::endl;
+        std::cout << "  p: " << params.sa_params.p << std::endl;
+    } else if (params.solver_name == "ga") {
         std::cout << "  population_size: " << params.ga_params.population_size << std::endl;
         std::cout << "  generations: " << params.ga_params.generations << std::endl;
         std::cout << "  crossover_rate: " << params.ga_params.crossover_rate << std::endl;
         std::cout << "  mutation_rate: " << params.ga_params.mutation_rate << std::endl;
         std::cout << "  p: " << params.ga_params.p << std::endl;
-    }
-    auto aco_params_node = params.config[params.exp_size]["aco-ts"];
-    if (aco_params_node) {
+    } else if (params.solver_name == "aco-ts") {
         std::cout << "  num_ants: " << params.aco_params.num_ants << std::endl;
         std::cout << "  num_iterations: " << params.aco_params.num_iterations << std::endl;
         std::cout << "  alpha: " << params.aco_params.alpha << std::endl;

@@ -3,7 +3,6 @@
 #include "solvers/SA.h"      // Include SA solver
 #include "solvers/GA.h"      // Include GA solver
 #include "solvers/ACO_TS.h"  // Include ACO-TS solver
-#include "solvers/ThreeDACO.h" // Include PACO (3D ACO) solver
 #include <iostream>
 #include <vector>
 #include <string>
@@ -215,16 +214,6 @@ Solution run_solver_with_config(const std::string& solver_name, const VRPInstanc
             params.p = std::get<double>(config.at("p"));
             params.stagnation_limit = std::get<int>(config.at("stagnation_limit"));
             sol = ACO_TS::solve(instance, params);
-        } else if (solver_name == "paco") {
-            ThreeDACOParams params;
-            params.num_ants = std::get<int>(config.at("num_ants"));
-            params.num_iterations = std::get<int>(config.at("num_iterations"));
-            params.alpha = std::get<double>(config.at("alpha"));
-            params.beta = std::get<double>(config.at("beta"));
-            params.evaporation_rate = std::get<double>(config.at("evaporation_rate"));
-            params.Q = std::get<double>(config.at("Q"));
-            params.num_elitist = std::max(1, params.num_ants / 10); // Example: top 10% or at least 1
-            sol = ThreeDACO::solve(instance, params);
         } else {
             std::cerr << "Error: Unknown solver name '" << solver_name << "' in run_solver_with_config" << std::endl;
             sol.objective_value = std::numeric_limits<double>::max(); // Indicate error/infeasibility

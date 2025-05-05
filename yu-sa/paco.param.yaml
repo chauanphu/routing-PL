@@ -1,35 +1,41 @@
 small:
   data_dir: data/25
   paco_params:
-    num_ants: 256
-    num_iterations: 30
+    num_ants: 40
+    num_iterations: 500
     alpha: 1.0
-    beta: 1.0
-    evaporation_rate: 0.4
+    beta: 2.0
+    evaporation_rate: 0.1
     Q: 1.0
+    t: 5
+    p: 4
   num_runs: 1
-  output_csv: output/solutions/small_aco_ts.csv
+  output_csv: output/solutions/small_paco.csv
 
 medium:
   data_dir: data/50
   paco_params:
-    num_ants: 512
-    num_iterations: 50
+    num_ants: 40
+    num_iterations: 500
     alpha: 1.0
-    beta: 1.0
-    evaporation_rate: 0.4
+    beta: 2.0
+    evaporation_rate: 0.1
     Q: 1.0
+    t: 5
+    p: 4
   num_runs: 1
-  output_csv: output/solutions/medium_aco_ts.csv
+  output_csv: output/solutions/medium_paco.csv
 
 large:
   data_dir: data/100
   paco_params:
-    num_ants: 1024
-    num_iterations: 50
+    num_ants: 40
+    num_iterations: 500
     alpha: 1.0
-    beta: 1.0
-    evaporation_rate: 0.4
+    beta: 2.0
+    evaporation_rate: 0.1
     Q: 1.0
+    t: 5
+    p: 4
   num_runs: 1
-  output_csv: output/solutions/large_aco_ts.csv
+  output_csv: output/solutions/large_paco.csv

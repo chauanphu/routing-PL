@@ -32,7 +32,9 @@ add_executable(tune
 )
 
 find_package(yaml-cpp REQUIRED)
-target_link_libraries(vrppl_loader yaml-cpp)
-target_link_libraries(doe yaml-cpp)
-target_link_libraries(test yaml-cpp)
-target_link_libraries(tune yaml-cpp)
+find_package(OpenMP REQUIRED)
+
+target_link_libraries(vrppl_loader yaml-cpp OpenMP::OpenMP_CXX)
+target_link_libraries(doe yaml-cpp OpenMP::OpenMP_CXX)
+target_link_libraries(test yaml-cpp OpenMP::OpenMP_CXX)
+target_link_libraries(tune yaml-cpp OpenMP::OpenMP_CXX)
