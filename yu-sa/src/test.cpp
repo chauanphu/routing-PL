@@ -178,6 +178,25 @@ std::string get_first_instance(const std::string& dir) {
     return files.empty() ? "" : files.front();
 }
 
+// Helper: Print distances between consecutive nodes in a route for debugging
+void print_route_distances(const VRPInstance& instance, const std::vector<int>& route) {
+    std::cout << "Route: ";
+    for (size_t i = 0; i < route.size(); ++i) {
+        std::cout << route[i];
+        if (i + 1 < route.size()) std::cout << " -> ";
+    }
+    std::cout << std::endl;
+    double total = 0.0;
+    for (size_t i = 0; i + 1 < route.size(); ++i) {
+        int from = route[i];
+        int to = route[i+1];
+        double dist = instance.distance_matrix[from][to];
+        std::cout << "  " << from << " -> " << to << ": " << dist << std::endl;
+        total += dist;
+    }
+    std::cout << "Total distance: " << total << std::endl;
+}
+
 int main(int argc, char* argv[]) {
     ExperimentParams params = parse_params(argc, argv);
     print_params(params);
@@ -187,7 +206,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     std::string data_dir = "../" + params.config[size]["data_dir"].as<std::string>();
-    std::string instance_file = get_first_instance(data_dir);
+    std::string instance_file;
+    if (!params.instance_file.empty()) {
+        instance_file = params.instance_file;
+    } else {
+        instance_file = get_first_instance(data_dir);
+    }
     if (instance_file.empty()) {
         std::cout << "No instance found for size: " << size << std::endl;
         return 1;
@@ -231,19 +255,16 @@ int main(int argc, char* argv[]) {
     double runtime = std::chrono::duration<double>(end - start).count();
     std::cout << "  Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
     // Print routes and customer permutation
-    std::cout << "Routes:" << std::endl;
-    for (size_t i = 0; i < sol.routes.size(); ++i) {
-        std::cout << "  Route " << i+1 << ": ";
-        for (size_t j = 0; j < sol.routes[i].size(); ++j) {
-            std::cout << sol.routes[i][j];
-            if (j + 1 < sol.routes[i].size()) std::cout << " -> ";
-        }
-        std::cout << std::endl;
-    }
     std::cout << "Customer permutation: ";
     for (size_t i = 0; i < sol.customer_permutation.size(); ++i) {
         std::cout << sol.customer_permutation[i];
         if (i + 1 < sol.customer_permutation.size()) std::cout << ", ";
+    }
+    // Print distances for debugging
+    std::cout << "\nRoute distances:" << std::endl;
+    for (size_t i = 0; i < sol.routes.size(); ++i) {
+        std::cout << "Route " << i+1 << ":" << std::endl;
+        print_route_distances(instance, sol.routes[i]);
     }
     std::cout << std::endl;
     return 0;

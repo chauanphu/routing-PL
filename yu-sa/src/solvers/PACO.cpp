@@ -42,6 +42,7 @@ paco_construct_solution(const VRPInstance& instance,
             else if (c->customer_type == 2) allowed = {1};
             else allowed = {0, 1};
             for (int d : allowed) {
+                if (tau[prev_index][j][d] == 0.0) continue; // skip infeasible
                 double value = std::pow(tau[prev_index][j][d], alpha);
                 candidate_options.emplace_back(j, d, value);
             }
@@ -122,12 +123,47 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
             std::random_device rd; std::mt19937 gen(rd() + tid);
             for (int k = start; k < end; ++k) {
                 auto [perm, customer2node] = paco_construct_solution(instance, tau, params.alpha, params.beta, gen);
-                // Print out perm and customer2node for debugging
-
-                Solution sol = Solver::evaluate(instance, perm, customer2node, false);
+                // Local search (Simulated Annealing style, 3 iterations)
+                std::vector<int> best_perm = perm;
+                double best_obj = Solver::evaluate(instance, best_perm, customer2node, false).objective_value;
+                std::vector<int> curr_perm = best_perm;
+                double curr_obj = best_obj;
+                std::uniform_real_distribution<> prob(0.0, 1.0);
+                for (int sa_iter = 0; sa_iter < 3; ++sa_iter) {
+                    std::vector<int> neighbor = curr_perm;
+                    double r = prob(gen);
+                    int n = neighbor.size();
+                    if (n > 1) {
+                        if (r < 1.0/3) {
+                            int i = gen() % n, j = gen() % n;
+                            if (i != j) std::swap(neighbor[i], neighbor[j]);
+                        } else if (r < 2.0/3) {
+                            int i = gen() % n, j = gen() % n;
+                            if (i != j) {
+                                int val = neighbor[i];
+                                neighbor.erase(neighbor.begin() + i);
+                                neighbor.insert(neighbor.begin() + j, val);
+                            }
+                        } else {
+                            int i = gen() % n, j = gen() % n;
+                            if (i > j) std::swap(i, j);
+                            if (i != j) std::reverse(neighbor.begin() + i, neighbor.begin() + j + 1);
+                        }
+                        double neighbor_obj = Solver::evaluate(instance, neighbor, customer2node, false).objective_value;
+                        double delta = neighbor_obj - curr_obj;
+                        if (delta < 0 || prob(gen) < std::exp(-delta / 1.0)) {
+                            curr_perm = neighbor;
+                            curr_obj = neighbor_obj;
+                            if (curr_obj < best_obj) {
+                                best_perm = curr_perm;
+                                best_obj = curr_obj;
+                            }
+                        }
+                    }
+                }
+                Solution sol = Solver::evaluate(instance, best_perm, customer2node, false);
                 all_solutions[k] = sol;
                 all_objs[k] = sol.objective_value;
-
             }
         }
         // std::cout << "[PACO] Finished ant construction." << std::endl;

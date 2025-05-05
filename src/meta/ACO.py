@@ -648,10 +648,28 @@ class PACO(Solver):
                 print("Cleanup error:", e)
             self.pheromone_shm = None
 
+def print_routes(routes, instance=None):
+    """
+    Print each route with node IDs and, if instance is provided, print distances between consecutive nodes and total distance.
+    """
+    for idx, route in enumerate(routes):
+        print(f"Route {idx+1}: ", end="")
+        print(" -> ".join(str(node.node_id) for node in route))
+        if instance is not None:
+            total = 0.0
+            for i in range(len(route) - 1):
+                from_id = route[i].node_id
+                to_id = route[i+1].node_id
+                dist = instance.euclidean_distance(route[i], route[i+1])
+                print(f"  {from_id} -> {to_id}: {dist}")
+                total += dist
+            print(f"  Total distance: {total}")
+        print()
+
 def main():
     instance = Problem()
-    instance.load_data("data/50/R101_co_50.txt")
-    aco = PACO(instance, num_ants=3200, batch_size=3200 // 64, num_iterations=100, alpha=1.0, beta=1.0, evaporation_rate=0.4, Q=1.0, elitist_num=20)
+    instance.load_data("data/25/C101_co_25.txt")
+    aco = PACO(instance, num_ants=256, batch_size=256 // 64, num_iterations=30, alpha=1.0, beta=1.0, evaporation_rate=0.4, Q=1.0, elitist_num=20)
     import timeit
     # plot_pheromones_heatmap(aco.shared_pheromones, filename="output/initial_pheromones.png")
     run_time = timeit.timeit(lambda: aco.optimize(verbose=True), number=1)
@@ -661,7 +679,7 @@ def main():
     print(f"Best Fitness: {aco.global_best_fitness}")
     print(f"Execution Time: {run_time:.2f} seconds")
     print("Best Solution:")
-    print_routes(aco.global_best_routes)
+    print_routes(aco.global_best_routes, instance)
     aco.plot_fitness_history()
     aco.plot_routes()
 

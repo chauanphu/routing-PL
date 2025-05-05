@@ -619,7 +619,8 @@ def print_routes(routes: list[list[Node]]):
     print("Number of routes: ", len(routes))
     print("Longest route: ", max([len(route) for route in routes]))
     print("Shortest route: ", min([len(route) for route in routes]))
-    for route in routes:
+    for i, route in enumerate(routes):
+        print(f"Route {i + 1}: ", end="")
         for node in route:
             print(node.model_dump()["node_id"], end=" ")
         print()
