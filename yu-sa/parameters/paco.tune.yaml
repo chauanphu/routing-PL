@@ -1,32 +1,43 @@
 parameters:
-  num_ants:
+  m:
     type: int
-    range: [10, 100]
+    range: [128, 512]
     default: 20
     step: 5
-  num_iterations:
+  I:
     type: int
-    range: [50, 1000]
+    range: [50, 100]
     default: 100
     step: 50
   alpha:
     type: float
-    range: [0.5, 5.0]
+    range: [0.5, 3.0]
     default: 1.0
     step: 0.5
   beta:
     type: float
-    range: [1.0, 10.0]
-    default: 2.0
+    range: [0.5, 3.0]
+    default: 1.0
     step: 0.5
-  evaporation_rate:
+  rho:
     type: float
-    range: [0.01, 0.5]
-    default: 0.1
-    step: 0.01
+    range: [0.1, 0.9]
+    default: 0.4
+    step: 0.1
   Q:
     type: float
-    range: [10.0, 1000.0]
-    default: 100.0
-    step: 10.0
+    range: [0.5, 2.0]
+    default: 1.0
+    step: 0.5
+  t:
+    type: int
+    range: [10, 50]
+    default: 20
+    step: 10
+  p:
+    type: int
+    range: [32, 32]
+    default: 32
+    step: 1
+
 # num_elitist is calculated within the solver based on num_ants, so not included here for tuning

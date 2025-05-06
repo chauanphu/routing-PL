@@ -3,6 +3,7 @@
 #include "solvers/SA.h"
 #include "solvers/GA.h"
 #include "solvers/ACO_TS.h"
+#include "solvers/PACO.h" // Add PACO include
 #include <iostream>
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -17,7 +18,8 @@ struct ExperimentParams {
     std::string instance_file;
     SAParams sa_params;
     GAParams ga_params;
-    ACOTSParams aco_params; // Add ACO-TS params
+    ACOTSParams aco_params;
+    PACOParams paco_params; // Add PACO params
     std::string output_csv;
     int num_runs;
     std::string data_dir;
@@ -26,11 +28,14 @@ struct ExperimentParams {
 
 ExperimentParams parse_params(int argc, char* argv[]) {
     if (argc < 3) {
-        std::cout << "Usage: " << argv[0] << " <solver> <experiment_size> [instance_file] [params_yaml]" << std::endl;
-        std::cout << "  solver: sa (Simulated Annealing) | ga (Genetic Algorithm) | aco-ts (ACO-TS)" << std::endl;
-        std::cout << "  experiment_size: small | medium | large" << std::endl;
-        std::cout << "  instance_file: (optional) path to a single instance file" << std::endl;
-        std::cout << "  params_yaml: (optional) path to params yaml file, defaults to <solver>.param.yaml" << std::endl;
+        std::cerr << "Usage: ./main --solver <name> --params <param_file.yaml> --instances <dir> [--num-runs <int>] [--output <output_file.csv>] [--size <experiment_size>] [--verbose <level> | -v <level>]" << std::endl;
+        std::cerr << "  --solver: sa | ga | aco-ts | paco" << std::endl;
+        std::cerr << "  --params: parameter YAML file" << std::endl;
+        std::cerr << "  --instances: directory containing instance files" << std::endl;
+        std::cerr << "  --num-runs: number of runs per instance (default: from YAML)" << std::endl;
+        std::cerr << "  --output: output CSV file (default: from YAML)" << std::endl;
+        std::cerr << "  --size: experiment size (small | medium | large) (default: small)" << std::endl;
+        std::cerr << "  --verbose, -v: verbosity level (default: 1)" << std::endl;
         exit(1);
     }
     ExperimentParams params;
@@ -77,6 +82,20 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.aco_params.Q = aco_params_node["Q"].as<double>();
         params.aco_params.stagnation_limit = aco_params_node["stagnation_limit"] ? aco_params_node["stagnation_limit"].as<int>() : 10;
         params.aco_params.p = aco_params_node["p"] ? aco_params_node["p"].as<double>() : 0.1;
+    } else if (params.solver_name == "paco") {
+        auto paco_params_node = params.config[params.exp_size]["paco"];
+        if (!paco_params_node) {
+            std::cerr << "paco not found in " << params_yaml << std::endl;
+            exit(1);
+        }
+        params.paco_params.m = paco_params_node["m"].as<int>();
+        params.paco_params.alpha = paco_params_node["alpha"].as<double>();
+        params.paco_params.beta = paco_params_node["beta"].as<double>();
+        params.paco_params.rho = paco_params_node["rho"].as<double>();
+        params.paco_params.Q = paco_params_node["Q"].as<double>();
+        params.paco_params.I = paco_params_node["I"].as<int>();
+        params.paco_params.t = paco_params_node["t"].as<int>();
+        params.paco_params.p = paco_params_node["p"].as<int>();
     } else {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
@@ -146,6 +165,15 @@ void print_params(const ExperimentParams& params) {
         std::cout << "  Q: " << params.aco_params.Q << std::endl;
         std::cout << "  stagnation_limit: " << params.aco_params.stagnation_limit << std::endl;
         std::cout << "  p: " << params.aco_params.p << std::endl;
+    } else if (params.solver_name == "paco") {
+        std::cout << "  m: " << params.paco_params.m << std::endl;
+        std::cout << "  alpha: " << params.paco_params.alpha << std::endl;
+        std::cout << "  beta: " << params.paco_params.beta << std::endl;
+        std::cout << "  rho: " << params.paco_params.rho << std::endl;
+        std::cout << "  Q: " << params.paco_params.Q << std::endl;
+        std::cout << "  I: " << params.paco_params.I << std::endl;
+        std::cout << "  t: " << params.paco_params.t << std::endl;
+        std::cout << "  p: " << params.paco_params.p << std::endl;
     }
     std::cout << "  num_runs: " << params.num_runs << std::endl;
     std::cout << "  output_csv: " << params.output_csv << std::endl;
@@ -171,6 +199,8 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
                 sol = GA::solve(instance, params.ga_params);
             } else if (params.solver_name == "aco-ts") {
                 sol = ACO_TS::solve(instance, params.aco_params);
+            } else if (params.solver_name == "paco") {
+                sol = PACO::solve(instance, params.paco_params);
             } else {
                 std::cerr << "Unknown solver: " << params.solver_name << std::endl;
                 exit(1);

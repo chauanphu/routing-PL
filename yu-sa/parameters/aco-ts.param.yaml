@@ -1,6 +1,6 @@
 small:
   data_dir: data/25/
-  aco-ts:
+  params:
     Q: 1.2807451356745072
     alpha: 3.60589576591767
     beta: 4.9947874738419689
@@ -14,7 +14,7 @@ small:
 
 medium:
   data_dir: data/50
-  aco-ts:
+  params:
     Q: 7.9
     alpha: 4.5
     beta: 7.94
@@ -28,7 +28,7 @@ medium:
 
 large:
   data_dir: data/100
-  aco-ts:
+  params:
     num_ants: 1000
     num_iterations: 50
     alpha: 1.0

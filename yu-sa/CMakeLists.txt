@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 file(GLOB CORE_SRC src/core/*.cpp)
 file(GLOB SOLVER_SRC src/solvers/*.cpp)
 
-add_executable(vrppl_loader
+add_executable(main
     src/main.cpp
     ${CORE_SRC}
     ${SOLVER_SRC}
@@ -34,7 +34,7 @@ add_executable(tune
 find_package(yaml-cpp REQUIRED)
 find_package(OpenMP REQUIRED)
 
-target_link_libraries(vrppl_loader yaml-cpp OpenMP::OpenMP_CXX)
+target_link_libraries(main yaml-cpp OpenMP::OpenMP_CXX)
 target_link_libraries(doe yaml-cpp OpenMP::OpenMP_CXX)
 target_link_libraries(test yaml-cpp OpenMP::OpenMP_CXX)
 target_link_libraries(tune yaml-cpp OpenMP::OpenMP_CXX)

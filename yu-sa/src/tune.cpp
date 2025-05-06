@@ -3,6 +3,7 @@
 #include "solvers/SA.h"      // Include SA solver
 #include "solvers/GA.h"      // Include GA solver
 #include "solvers/ACO_TS.h"  // Include ACO-TS solver
+#include "solvers/PACO.h"    // Include PACO solver
 #include <iostream>
 #include <vector>
 #include <string>
@@ -214,6 +215,17 @@ Solution run_solver_with_config(const std::string& solver_name, const VRPInstanc
             params.p = std::get<double>(config.at("p"));
             params.stagnation_limit = std::get<int>(config.at("stagnation_limit"));
             sol = ACO_TS::solve(instance, params);
+        } else if (solver_name == "paco") {
+            PACOParams params;
+            params.m = std::get<int>(config.at("m"));
+            params.alpha = std::get<double>(config.at("alpha"));
+            params.beta = std::get<double>(config.at("beta"));
+            params.rho = std::get<double>(config.at("rho"));
+            params.Q = std::get<double>(config.at("Q"));
+            params.I = std::get<int>(config.at("I"));
+            params.t = std::get<int>(config.at("t"));
+            params.p = std::get<int>(config.at("p"));
+            sol = PACO::solve(instance, params);
         } else {
             std::cerr << "Error: Unknown solver name '" << solver_name << "' in run_solver_with_config" << std::endl;
             sol.objective_value = std::numeric_limits<double>::max(); // Indicate error/infeasibility
@@ -558,11 +570,7 @@ void save_configuration(const std::string& filename, const std::string& solver_n
 // --- Main Function ---
 int main(int argc, char* argv[]) {
     if (argc < 5) {
-        std::cerr << "Usage: " << argv[0] << " --solver <name> --params <param_file.yaml> --instances <dir>"
-                  << " [--max-evals <int>] [--runs-per-instance <int>]"
-                  << " [--R <int>] [--s <int>] [--p-restart <float>]"
-                  << " [--penalty <float>] [--output <output_file.yaml>]"
-                  << " [--verbose <level> | -v <level>]" << std::endl;
+        std::cerr << "Usage: ./tune --solver <name> --params <param_file.yaml> --instances <dir> [--max-evals <int>] [--runs-per-instance <int>] [--R <int>] [--s <int>] [--p-restart <float>] [--penalty <float>] [--output <output_file.yaml>] [--verbose <level> | -v <level>]" << std::endl;
         return 1;
     }
 

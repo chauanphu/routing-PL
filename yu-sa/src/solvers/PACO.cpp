@@ -82,16 +82,16 @@ paco_construct_solution(const VRPInstance& instance,
 }
 
 Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
-    std::cout << "[PACO] Starting solve..." << std::endl;
+    // std::cout << "[PACO] Starting solve..." << std::endl;
     int n = instance.num_customers + 1; // including depot
     int m = params.m;
     int p = params.p;
     int t = params.t;
     int I = params.I;
-    std::cout << "[PACO] n=" << n << ", m=" << m << ", p=" << p << ", t=" << t << ", I=" << I << std::endl;
+    // std::cout << "[PACO] n=" << n << ", m=" << m << ", p=" << p << ", t=" << t << ", I=" << I << std::endl;
     std::vector<std::vector<std::vector<double>>> tau(n, std::vector<std::vector<double>>(n, std::vector<double>(2, 1.0)));
     std::vector<std::vector<std::vector<int>>> mask(n, std::vector<std::vector<int>>(n, std::vector<int>(2, 1)));
-    std::cout << "[PACO] Building feasibility mask..." << std::endl;
+    // std::cout << "[PACO] Building feasibility mask..." << std::endl;
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
             mask[i][j][0] = (i != j) ? 1 : 0;
@@ -103,7 +103,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
             }
         }
     }
-    std::cout << "[PACO] Applying mask to pheromone matrix..." << std::endl;
+    // std::cout << "[PACO] Applying mask to pheromone matrix..." << std::endl;
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < n; ++j)
             for (int o = 0; o < 2; ++o)
@@ -111,7 +111,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
     Solution global_best;
     double global_best_obj = std::numeric_limits<double>::max();
     for (int iter = 0; iter < I; ++iter) {
-        std::cout << "[PACO] Iteration " << iter << std::endl;
+        // std::cout << "[PACO] Iteration " << iter << std::endl;
         std::vector<Solution> all_solutions(m);
         std::vector<double> all_objs(m);
         #pragma omp parallel num_threads(p)
@@ -197,8 +197,8 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
             global_best = all_solutions[best_idx];
             global_best_obj = all_objs[best_idx];
         }
-        std::cout << "[PACO] Best solution so far: " << global_best_obj << std::endl;
+        // std::cout << "[PACO] Best solution so far: " << global_best_obj << std::endl;
     }
-    std::cout << "[PACO] Done. Returning best solution." << std::endl;
+    // std::cout << "[PACO] Done. Returning best solution." << std::endl;
     return global_best;
 }

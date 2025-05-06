@@ -66,9 +66,9 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.ga_params.mutation_rate = ga_params_node["mutation_rate"].as<double>();
         params.ga_params.p = ga_params_node["p"].as<double>();
     } else if (params.solver_name == "aco-ts") {
-        auto aco_params_node = params.config[params.exp_size]["paco_params"];
+        auto aco_params_node = params.config[params.exp_size]["params"];
         if (!aco_params_node) {
-            std::cerr << "paco_params not found in " << params_yaml << std::endl;
+            std::cerr << "params not found in " << params_yaml << std::endl;
             exit(1);
         }
         params.aco_params.num_ants = aco_params_node["num_ants"].as<int>();
