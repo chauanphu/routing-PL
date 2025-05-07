@@ -27,24 +27,57 @@ struct ExperimentParams {
 };
 
 ExperimentParams parse_params(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cout << "Usage: " << argv[0] << " <solver> <experiment_size> [instance_file] [params_yaml]" << std::endl;
-        std::cout << "  solver: sa (Simulated Annealing) | ga (Genetic Algorithm) | aco-ts (ACO-TS) | paco (3D ACO)" << std::endl;
-        std::cout << "  experiment_size: small | medium | large" << std::endl;
-        std::cout << "  instance_file: (optional) path to a single instance file" << std::endl;
-        std::cout << "  params_yaml: (optional) path to params yaml file, defaults to <solver>.param.yaml" << std::endl;
+    ExperimentParams params;
+    params.exp_size = "small";
+    params.num_runs = 1;
+    params.output_csv = "";
+    params.data_dir = "";
+    std::string params_yaml = "";
+
+    // Parse arguments by key
+    for (int i = 1; i < argc; ++i) {
+        std::string key = argv[i];
+        if (key == "--solver" && i + 1 < argc) {
+            params.solver_name = argv[++i];
+        } else if ((key == "--size" || key == "--exp-size") && i + 1 < argc) {
+            params.exp_size = argv[++i];
+        } else if (key == "--params" && i + 1 < argc) {
+            params_yaml = argv[++i];
+        } else if (key == "--instances" && i + 1 < argc) {
+            params.data_dir = argv[++i];
+        } else if (key == "--num-runs" && i + 1 < argc) {
+            params.num_runs = std::stoi(argv[++i]);
+        } else if (key == "--output" && i + 1 < argc) {
+            params.output_csv = argv[++i];
+        } else if (key == "--instance-file" && i + 1 < argc) {
+            params.instance_file = argv[++i];
+        } else if ((key == "--verbose" || key == "-v") && i + 1 < argc) {
+            ++i; // skip verbosity value
+        }
+    }
+
+    // Check required arguments
+    if (params.solver_name.empty()) {
+        std::cerr << "Usage: ./test --solver <name> --params <param_file.yaml> [--instances <dir>] [--num-runs <int>] [--output <output_file.csv>] [--size <experiment_size>] [--instance-file <file>] [--verbose <level> | -v <level>]" << std::endl;
         exit(1);
     }
-    ExperimentParams params;
-    params.solver_name = argv[1];
-    params.exp_size = argv[2];
-    params.instance_file = (argc >= 4) ? argv[3] : "";
-    std::string params_yaml = (argc >= 5) ? argv[4] : ("../" + params.solver_name + ".param.yaml");
+    if (params_yaml.empty()) {
+        params_yaml = params.solver_name + ".param.yaml";
+    }
     params.config = YAML::LoadFile(params_yaml);
     if (!params.config[params.exp_size]) {
         std::cerr << "Experiment size '" << params.exp_size << "' not found in " << params_yaml << std::endl;
         exit(1);
     }
+    // Set from YAML if not set by CLI
+    if (params.data_dir.empty() && params.config[params.exp_size]["data_dir"])
+        params.data_dir = params.config[params.exp_size]["data_dir"].as<std::string>();
+    if (params.output_csv.empty() && params.config[params.exp_size]["output_csv"])
+        params.output_csv = params.config[params.exp_size]["output_csv"].as<std::string>();
+    if (params.num_runs == 1 && params.config[params.exp_size]["num_runs"])
+        params.num_runs = params.config[params.exp_size]["num_runs"].as<int>();
+
+    // Solver-specific params
     if (params.solver_name == "sa") {
         auto sa_params_node = params.config[params.exp_size]["sa_params"];
         params.sa_params.max_iter = sa_params_node["max_iter"].as<int>();
@@ -66,9 +99,9 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.ga_params.mutation_rate = ga_params_node["mutation_rate"].as<double>();
         params.ga_params.p = ga_params_node["p"].as<double>();
     } else if (params.solver_name == "aco-ts") {
-        auto aco_params_node = params.config[params.exp_size]["params"];
+        auto aco_params_node = params.config[params.exp_size]["paco_params"];
         if (!aco_params_node) {
-            std::cerr << "params not found in " << params_yaml << std::endl;
+            std::cerr << "paco_params not found in " << params_yaml << std::endl;
             exit(1);
         }
         params.aco_params.num_ants = aco_params_node["num_ants"].as<int>();
@@ -80,11 +113,11 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.aco_params.p = aco_params_node["p"].as<double>();
     } else if (params.solver_name == "paco") {
         auto paco_node = params.config[params.exp_size]["paco_params"];
-        params.paco_params.m = paco_node["num_ants"].as<int>();
-        params.paco_params.I = paco_node["num_iterations"].as<int>();
+        params.paco_params.m = paco_node["m"].as<int>();
+        params.paco_params.I = paco_node["I"].as<int>();
         params.paco_params.alpha = paco_node["alpha"].as<double>();
         params.paco_params.beta = paco_node["beta"].as<double>();
-        params.paco_params.rho = paco_node["evaporation_rate"].as<double>();
+        params.paco_params.rho = paco_node["rho"].as<double>();
         params.paco_params.Q = paco_node["Q"].as<double>();
         params.paco_params.t = paco_node["t"].as<int>();
         params.paco_params.p = paco_node["p"].as<int>();
@@ -92,9 +125,6 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
     }
-    params.output_csv = "../" + params.config[params.exp_size]["output_csv"].as<std::string>();
-    params.num_runs = params.config[params.exp_size]["num_runs"].as<int>();
-    params.data_dir = params.config[params.exp_size]["data_dir"].as<std::string>();
     return params;
 }
 
@@ -128,11 +158,11 @@ void print_params(const ExperimentParams& params) {
     } else if (params.solver_name == "paco") {
         std::cout << "3D ACO Parameters:" << std::endl;
         auto paco_node = params.config[params.exp_size]["paco_params"];
-        std::cout << "  num_ants: " << paco_node["num_ants"].as<int>() << std::endl;
-        std::cout << "  num_iterations: " << paco_node["num_iterations"].as<int>() << std::endl;
+        std::cout << "  num_ants: " << paco_node["m"].as<int>() << std::endl;
+        std::cout << "  num_iterations: " << paco_node["I"].as<int>() << std::endl;
         std::cout << "  alpha: " << paco_node["alpha"].as<double>() << std::endl;
         std::cout << "  beta: " << paco_node["beta"].as<double>() << std::endl;
-        std::cout << "  evaporation_rate: " << paco_node["evaporation_rate"].as<double>() << std::endl;
+        std::cout << "  evaporation_rate: " << paco_node["rho"].as<double>() << std::endl;
         std::cout << "  Q: " << paco_node["Q"].as<double>() << std::endl;
         std::cout << "  t: " << paco_node["t"].as<int>() << std::endl;
         std::cout << "  p: " << paco_node["p"].as<int>() << std::endl;
@@ -205,7 +235,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Experiment size not found: " << size << std::endl;
         return 1;
     }
-    std::string data_dir = "../" + params.config[size]["data_dir"].as<std::string>();
+    std::string data_dir = params.config[size]["data_dir"].as<std::string>();
     std::string instance_file;
     if (!params.instance_file.empty()) {
         instance_file = params.instance_file;
@@ -238,11 +268,11 @@ int main(int argc, char* argv[]) {
         sol = ACO_TS::solve(instance, aco_params);
     } else if (params.solver_name == "paco") {
         auto paco_node = params.config[size]["paco_params"];
-        params.paco_params.m = paco_node["num_ants"].as<int>();
-        params.paco_params.I = paco_node["num_iterations"].as<int>();
+        params.paco_params.m = paco_node["m"].as<int>();
+        params.paco_params.I = paco_node["I"].as<int>();
         params.paco_params.alpha = paco_node["alpha"].as<double>();
         params.paco_params.beta = paco_node["beta"].as<double>();
-        params.paco_params.rho = paco_node["evaporation_rate"].as<double>();
+        params.paco_params.rho = paco_node["rho"].as<double>();
         params.paco_params.Q = paco_node["Q"].as<double>();
         params.paco_params.t = paco_node["t"].as<int>();
         params.paco_params.p = paco_node["p"].as<int>();

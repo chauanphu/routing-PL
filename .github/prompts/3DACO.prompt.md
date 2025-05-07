@@ -97,3 +97,204 @@ It uses coarse-grain master-slave parallel schema.
 - From the shared-memory 3d pheromone matrix, each slave constructs solutions.
 - In each iteration, wait until all slaves have completed, then update the pheromone and global best known solution (if found)
 - Start again for new iteration, until completed.
+
+## References
+
+'''python
+class PACO(Solver):
+    def __init__(self, problem: Problem, num_ants=1000, num_iterations=100, batch_size=100, alpha=1.0, beta=2.0, evaporation_rate=0.2, Q=1.0, elitist_num=0.1):
+        """
+        Initializes the ACO optimizer for the VRPPL problem using a 3D pheromone matrix and sets up key parameters for
+        ant colony optimization with batch processing for parallel execution.
+
+        Parameters:
+            problem (Problem): The routing problem instance containing customer data and related properties.
+            num_ants (int, optional): The number of ants to simulate per iteration, influencing exploration. Defaults to 1000.
+            num_iterations (int, optional): The number of iterations the algorithm will perform to refine solutions. Defaults to 100.
+            batch_size (int, optional): The number of iterations to process in each parallel batch. Defaults to 100.
+            alpha (float, optional): The factor controlling the influence of pheromone trails in ant decision-making. Defaults to 1.0.
+            beta (float, optional): The factor controlling the influence of heuristic information (e.g., distance) in ant decisions. Defaults to 2.0.
+            evaporation_rate (float, optional): The rate at which pheromone intensity diminishes over time, promoting exploration. Defaults to 0.1.
+            Q (float, optional): The pheromone deposit constant, influencing the amount of pheromone deposited by ants. Defaults to 1.0.
+            elitist_num (int, optional): The number of elite solutions to retain. Defaults to 10.
+        """
+        super().__init__(problem.node2routes, num_iterations=num_iterations)
+        self.problem: Problem = problem
+        self.num_iterations = num_iterations
+        self.num_ants = num_ants
+        self.batch_size = batch_size
+        self.alpha = alpha
+        self.beta = beta
+        self.evaporation_rate = evaporation_rate
+        self.Q = Q
+        self.num_elitist = int(num_ants * elitist_num) if elitist_num < 1 else elitist_num
+        self.tau_min = 0.01
+        self.tau_max = 2.0
+        # n: number of customers
+        self.n = self.problem.num_customers
+
+        # Initialize a single 3D pheromone matrix with dimensions (n+1) x (n+1) x 2.
+        pheromones = np.full((self.n + 1, self.n + 1, 2), self.tau_max)
+        for j, customer in enumerate(self.problem.customers, start=1):
+            if customer.customer_type == 1:
+                pheromones[:, j, 1] = 0.0
+            elif customer.customer_type == 2:
+                pheromones[:, j, 0] = 0.0
+        # Create shared memory block for the pheromone matrix
+        self.pheromone_shm = shared_memory.SharedMemory(create=True, size=pheromones.nbytes)
+        # Create a NumPy array backed by shared memory
+        self.shared_pheromones = np.ndarray(pheromones.shape, dtype=pheromones.dtype, buffer=self.pheromone_shm.buf)
+        np.copyto(self.shared_pheromones, pheromones)
+        self.global_best_fitness = float('inf')
+        self.global_best_solution = None
+        self.global_best_routes = None
+        self.fitness_history = []
+        # To track overhead (average overhead per ant per iteration)
+        self.overhead_history = []
+        self.overhead = None
+
+    def construct_solution(self, shared_pheromones):
+        """
+        Constructs one ant's solution using the integrated 3D pheromone matrix.
+        """
+        current_location = (self.problem.depot.x, self.problem.depot.y)
+        prev_index = 0
+        unvisited = list(range(1, self.n + 1))
+        transitions = []
+        final_route = [self.problem.depot]
+
+        while unvisited:
+            candidate_options = []
+            for j in unvisited:
+                customer = self.problem.customers[j - 1]
+                allowed = [0] if customer.customer_type == 1 else [1] if customer.customer_type == 2 else [0, 1]
+                for d in allowed:
+                    candidate_coord = (customer.x, customer.y) if d == 0 else (customer.assigned_locker.x, customer.assigned_locker.y)
+                    distance = euclidean_distance(current_location, candidate_coord)
+                    heuristic = 1.0 / distance if distance > 0 else 1e6
+                    tau = shared_pheromones[prev_index, j, d]
+                    value = (tau ** self.alpha) * (heuristic ** self.beta)
+                    candidate_options.append((j, d, value, candidate_coord))
+
+            total_value = sum(option[2] for option in candidate_options)
+            probs = [option[2] / total_value for option in candidate_options] if total_value > 0 else [1 / len(candidate_options)] * len(candidate_options)
+            r = np.random.random()
+            cumulative = 0.0
+            selected = None
+            for (j, d, _, candidate_coord), prob in zip(candidate_options, probs):
+                cumulative += prob
+                if r <= cumulative:
+                    selected = (j, d, candidate_coord)
+                    break
+            if selected is None:
+                selected = candidate_options[-1][0:2] + (candidate_options[-1][3],)
+            j, d, candidate_coord = selected
+            transitions.append((prev_index, j, d))
+            final_route.append(self.problem.customers[j - 1] if d == 0 else self.problem.customers[j - 1].assigned_locker)
+            current_location = candidate_coord
+            prev_index = j
+            unvisited.remove(j)
+        final_route.append(self.problem.depot)
+        return transitions, final_route
+
+    def update_pheromones(self, solutions):
+        """
+        Updates the integrated 3D pheromone matrix based on ant solutions using both max–min and elitist strategies.
+        """
+        # Evaporate pheromones
+        self.shared_pheromones *= (1 - self.evaporation_rate)
+        solutions = sorted(solutions, key=lambda x: x[1])
+        solutions = solutions[:self.num_elitist]  # Keep only the best solutions
+
+        # Standard deposit from each ant's solution
+        for transitions, fitness in solutions:
+            deposit = self.Q / (fitness if fitness > 0 else 1e-8)
+            for (i, j, d) in transitions:
+                self.shared_pheromones[i, j, d] += deposit
+            
+    # --- Bundle Multiple Ants in One Task ---
+    def multi_ant_solution(self, num_ants_in_task, pheromone_shm_name, shape, dtype):
+        # Attach to shared memory for pheromones
+        shm = shared_memory.SharedMemory(name=pheromone_shm_name)
+        shared_pheromones = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
+        results = []
+        for _ in range(num_ants_in_task):
+            worker_ant_start = time.time()
+            transitions, final_route = self.construct_solution(shared_pheromones)
+            fitness, routes = self.problem.node2routes(final_route)
+            worker_ant_end = time.time()
+            ant_compute_time = worker_ant_end - worker_ant_start
+            # Append result with compute time for overhead estimation
+            results.append((transitions, fitness, final_route, routes, ant_compute_time))
+        shm.close()  # Only close, do not unlink in worker
+        return results
+    
+    def optimize(self, verbose=True):
+        """
+        Main optimization loop.
+        Returns a tuple: (global_best_solution, global_best_fitness, global_best_routes)
+        Also computes an average overhead per ant which is stored in self.overhead.
+        """
+        pheromone_shape = self.shared_pheromones.shape
+        pheromone_dtype = self.shared_pheromones.dtype
+        try:
+            with ProcessPoolExecutor() as executor:
+                for iteration in range(self.num_iterations):
+                    iter_start = time.time()
+                    futures = []
+                    submission_times = {}
+                    num_tasks = self.num_ants // self.batch_size
+                    # Submit tasks.
+                    for _ in range(num_tasks):
+                        sub_time = time.time()
+                        future = executor.submit(self.multi_ant_solution,
+                                                 self.batch_size,
+                                                 self.pheromone_shm.name,
+                                                 pheromone_shape,
+                                                 pheromone_dtype)
+                        futures.append(future)
+                        submission_times[future] = sub_time
+
+                    solutions = []
+                    overheads = []
+                    # Retrieve results.
+                    for future in as_completed(futures):
+                        iter_end = time.time()
+                        round_trip = iter_end - submission_times[future] # Round trip time is the time taken for the task to complete
+                        task_results = future.result()
+                        total_worker_time = sum(res[4] for res in task_results)
+                        overhead = round_trip - total_worker_time # Overhead = round-trip time - total worker time
+                        overheads.append(overhead)
+                        solutions.extend(task_results)
+
+                    # Update pheromones using the solutions from all ants.
+                    # We assume each task returns (transitions, fitness, ..., ...)
+                    self.update_pheromones([(transitions, fitness) for (transitions, fitness, _, _, _) in solutions])
+                    # Update global best.
+                    for (transitions, fitness, final_route, routes, _) in solutions:
+                        if fitness < self.global_best_fitness:
+                            self.global_best_fitness = fitness
+                            self.global_best_solution = final_route
+                            self.global_best_routes = routes
+                    # Record fitness history.
+                    self.fitness_history.append(self.global_best_fitness)
+                    iter_end = time.time()
+                    avg_overhead = sum(overheads) / len(overheads) if overheads else 0
+                    overhead_per_ant = avg_overhead / self.batch_size
+                    self.overhead_history.append(overhead_per_ant)
+                    if verbose:
+                        print(f"Iteration {iteration+1}/{self.num_iterations} | Best Fitness: {self.global_best_fitness:.2f} | Iteration Time: {iter_end - iter_start:.2f}s")
+        except Exception as e:
+            self.cleanup()
+            raise e
+        finally:
+            self.cleanup()
+        # Aggregate overall overhead.
+        if self.overhead_history:
+            self.overhead = mean(self.overhead_history)
+        else:
+            self.overhead = None
+        return self.global_best_solution, self.global_best_fitness, self.global_best_routes
+
+    def cleanup(self):
+'''

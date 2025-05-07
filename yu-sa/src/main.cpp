@@ -27,27 +27,55 @@ struct ExperimentParams {
 };
 
 ExperimentParams parse_params(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: ./main --solver <name> --params <param_file.yaml> --instances <dir> [--num-runs <int>] [--output <output_file.csv>] [--size <experiment_size>] [--verbose <level> | -v <level>]" << std::endl;
-        std::cerr << "  --solver: sa | ga | aco-ts | paco" << std::endl;
-        std::cerr << "  --params: parameter YAML file" << std::endl;
-        std::cerr << "  --instances: directory containing instance files" << std::endl;
-        std::cerr << "  --num-runs: number of runs per instance (default: from YAML)" << std::endl;
-        std::cerr << "  --output: output CSV file (default: from YAML)" << std::endl;
-        std::cerr << "  --size: experiment size (small | medium | large) (default: small)" << std::endl;
-        std::cerr << "  --verbose, -v: verbosity level (default: 1)" << std::endl;
+    ExperimentParams params;
+    params.exp_size = "small";
+    params.num_runs = 5;
+    params.output_csv = "../output/solutions/output.csv";
+    params.data_dir = "";
+    std::string params_yaml = "";
+
+    // Parse arguments by key
+    for (int i = 1; i < argc; ++i) {
+        std::string key = argv[i];
+        if (key == "--solver" && i + 1 < argc) {
+            params.solver_name = argv[++i];
+        } else if ((key == "--size" || key == "--exp-size") && i + 1 < argc) {
+            params.exp_size = argv[++i];
+        } else if (key == "--params" && i + 1 < argc) {
+            params_yaml = argv[++i];
+        } else if (key == "--instances" && i + 1 < argc) {
+            params.data_dir = argv[++i];
+        } else if (key == "--num-runs" && i + 1 < argc) {
+            params.num_runs = std::stoi(argv[++i]);
+        } else if (key == "--output" && i + 1 < argc) {
+            params.output_csv = argv[++i];
+        } else if ((key == "--verbose" || key == "-v") && i + 1 < argc) {
+            // Optionally handle verbosity here if needed
+            ++i;
+        }
+    }
+
+    // Check required arguments
+    if (params.solver_name.empty() || params_yaml.empty()) {
+        std::cerr << "Usage: ./main --solver <name> --params <param_file.yaml> [--instances <dir>] [--num-runs <int>] [--output <output_file.csv>] [--size <experiment_size>] [--verbose <level> | -v <level>]" << std::endl;
         exit(1);
     }
-    ExperimentParams params;
-    params.solver_name = argv[1];
-    params.exp_size = argv[2];
-    params.instance_file = (argc >= 4) ? argv[3] : "";
-    std::string params_yaml = (argc >= 5) ? argv[4] : (params.solver_name + ".param.yaml");
+
     params.config = YAML::LoadFile(params_yaml);
     if (!params.config[params.exp_size]) {
         std::cerr << "Experiment size '" << params.exp_size << "' not found in " << params_yaml << std::endl;
         exit(1);
     }
+
+    // If not set by CLI, get from YAML
+    if (params.data_dir.empty() && params.config[params.exp_size]["data_dir"])
+        params.data_dir = params.config[params.exp_size]["data_dir"].as<std::string>();
+    if (params.output_csv == "../output/solutions/output.csv" && params.config[params.exp_size]["output_csv"])
+        params.output_csv = params.config[params.exp_size]["output_csv"].as<std::string>();
+    if (params.num_runs == 5 && params.config[params.exp_size]["num_runs"])
+        params.num_runs = params.config[params.exp_size]["num_runs"].as<int>();
+
+    // ...existing solver param parsing code...
     if (params.solver_name == "sa") {
         auto sa_params_node = params.config[params.exp_size]["sa_params"];
         params.sa_params.max_iter = sa_params_node["max_iter"].as<int>();
@@ -83,7 +111,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.aco_params.stagnation_limit = aco_params_node["stagnation_limit"] ? aco_params_node["stagnation_limit"].as<int>() : 10;
         params.aco_params.p = aco_params_node["p"] ? aco_params_node["p"].as<double>() : 0.1;
     } else if (params.solver_name == "paco") {
-        auto paco_params_node = params.config[params.exp_size]["paco"];
+        auto paco_params_node = params.config[params.exp_size]["paco_params"];
         if (!paco_params_node) {
             std::cerr << "paco not found in " << params_yaml << std::endl;
             exit(1);
@@ -100,9 +128,6 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
     }
-    params.output_csv = params.config[params.exp_size]["output_csv"].as<std::string>();
-    params.num_runs = params.config[params.exp_size]["num_runs"].as<int>();
-    params.data_dir = params.config[params.exp_size]["data_dir"].as<std::string>();
     return params;
 }
 

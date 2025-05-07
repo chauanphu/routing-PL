@@ -1,5 +1,5 @@
 small:
-  data_dir: data/25
+  data_dir: ../data/25
   sa_params:
     max_iter: 6000
     T0: 10.0
@@ -9,7 +9,7 @@ small:
     patience: 50
     p: 0.5
   num_runs: 5
-  output_csv: output/solutions/small.csv
+  output_csv: ../output/solutions/small.csv
 
 medium:
   data_dir: data/50

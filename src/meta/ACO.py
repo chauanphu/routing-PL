@@ -406,11 +406,6 @@ class SACO(Solver):
             for (i, j, d) in transitions:
                 self.pheromones[i, j, d] += deposit
 
-        # Max–min pheromone clamping:
-        # if self.global_best_fitness < float('inf'):
-        #     # Clamp the pheromone matrix to lie within [tau_min, tau_max]
-        #     self.pheromones[:] = np.clip(self.pheromones, self.tau_min, self.tau_max)
-
         # Enforce restrictions on pheromone values for customer types
         for j, customer in enumerate(self.problem.customers, start=1):
             if customer.customer_type == 1:

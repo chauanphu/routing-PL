@@ -129,11 +129,11 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
                 std::vector<int> curr_perm = best_perm;
                 double curr_obj = best_obj;
                 std::uniform_real_distribution<> prob(0.0, 1.0);
-                for (int sa_iter = 0; sa_iter < 3; ++sa_iter) {
+                for (int ls_iter = 0; ls_iter < 10; ++ls_iter) {
                     std::vector<int> neighbor = curr_perm;
-                    double r = prob(gen);
                     int n = neighbor.size();
                     if (n > 1) {
+                        double r = std::uniform_real_distribution<>(0.0, 1.0)(gen);
                         if (r < 1.0/3) {
                             int i = gen() % n, j = gen() % n;
                             if (i != j) std::swap(neighbor[i], neighbor[j]);
@@ -150,8 +150,8 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
                             if (i != j) std::reverse(neighbor.begin() + i, neighbor.begin() + j + 1);
                         }
                         double neighbor_obj = Solver::evaluate(instance, neighbor, customer2node, false).objective_value;
-                        double delta = neighbor_obj - curr_obj;
-                        if (delta < 0 || prob(gen) < std::exp(-delta / 1.0)) {
+                        // Accept only if neighbor is better
+                        if (neighbor_obj < curr_obj) {
                             curr_perm = neighbor;
                             curr_obj = neighbor_obj;
                             if (curr_obj < best_obj) {
