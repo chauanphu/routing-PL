@@ -124,6 +124,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.paco_params.I = paco_params_node["I"].as<int>();
         params.paco_params.t = paco_params_node["t"].as<int>();
         params.paco_params.p = paco_params_node["p"].as<int>();
+        params.paco_params.LS = paco_params_node["LS"].as<int>();
     } else {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
@@ -199,6 +200,7 @@ void print_params(const ExperimentParams& params) {
         std::cout << "  I: " << params.paco_params.I << std::endl;
         std::cout << "  t: " << params.paco_params.t << std::endl;
         std::cout << "  p: " << params.paco_params.p << std::endl;
+        std::cout << "  LS: " << params.paco_params.LS << std::endl;
     }
     std::cout << "  num_runs: " << params.num_runs << std::endl;
     std::cout << "  output_csv: " << params.output_csv << std::endl;
@@ -219,7 +221,7 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
             instance.build_distance_matrix();
             Solution sol;
             if (params.solver_name == "sa") {
-                sol = SA::solve(instance, params.sa_params);
+                sol = SA::solve(instance, params.sa_params, false);
             } else if (params.solver_name == "ga") {
                 sol = GA::solve(instance, params.ga_params);
             } else if (params.solver_name == "aco-ts") {

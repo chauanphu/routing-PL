@@ -13,7 +13,8 @@ struct PACOParams {
     double Q;
     int I;     // Number of iterations
     int t;     // Top ants for elitist update
-    int p;     // Number of processors (threads)
+    int p = 32;     // Number of processors (threads)
+    int LS = 10;    // Local search strategy (0: none, 1: 2-opt, 2: 3-opt)
 };
 
 class PACO : public Solver {

@@ -83,6 +83,31 @@ T clamp(T val, T min_val, T max_val) {
     return std::max(min_val, std::min(val, max_val));
 }
 
+// Quantize a value to the nearest valid value according to min, max, and step
+ParamValue quantize_param(const ParamDef& def, ParamValue val) {
+    if (def.type == "int") {
+        int minv = std::get<int>(def.min_val);
+        int maxv = std::get<int>(def.max_val);
+        int step = std::get<int>(def.step);
+        int v = std::get<int>(val);
+        if (step > 0) {
+            v = minv + ((v - minv + step / 2) / step) * step;
+        }
+        v = clamp(v, minv, maxv);
+        return v;
+    } else {
+        double minv = std::get<double>(def.min_val);
+        double maxv = std::get<double>(def.max_val);
+        double step = std::get<double>(def.step);
+        double v = std::get<double>(val);
+        if (step > 0) {
+            v = minv + std::round((v - minv) / step) * step;
+        }
+        v = clamp(v, minv, maxv);
+        return v;
+    }
+}
+
 // Generate a random configuration within the defined ranges
 Configuration get_random_configuration(const ParamSpace& space, std::mt19937& rng) {
     Configuration config;
@@ -94,10 +119,12 @@ Configuration get_random_configuration(const ParamSpace& space, std::mt19937& rn
         }
         if (def.type == "int") {
             std::uniform_int_distribution<> dist(std::get<int>(def.min_val), std::get<int>(def.max_val));
-            config[pair.first] = dist(rng);
+            int v = dist(rng);
+            config[pair.first] = quantize_param(def, v);
         } else {
             std::uniform_real_distribution<> dist(std::get<double>(def.min_val), std::get<double>(def.max_val));
-            config[pair.first] = dist(rng);
+            double v = dist(rng);
+            config[pair.first] = quantize_param(def, v);
         }
     }
     return config;
@@ -211,7 +238,7 @@ double evaluate_configuration(const std::string& solver_name, const Configuratio
     }
     double final_avg_objective = total_avg_objective / feasible_instances;
     double final_avg_runtime = total_avg_runtime / instance_files.size();
-    double performance_score = final_avg_objective;
+    double performance_score = final_avg_objective + time_penalty_factor * final_avg_runtime;
     if (performance_score >= std::numeric_limits<double>::max()) {
         return std::numeric_limits<double>::max();
     }
@@ -248,12 +275,10 @@ std::string paramspace_to_json(const ParamSpace& space) {
         nlohmann::json p;
         p["type"] = v.type;
         if (v.type == "int") {
-            p["min"] = std::get<int>(v.min_val);
-            p["max"] = std::get<int>(v.max_val);
+            p["range"] = {std::get<int>(v.min_val), std::get<int>(v.max_val)};
             p["step"] = std::get<int>(v.step);
         } else {
-            p["min"] = std::get<double>(v.min_val);
-            p["max"] = std::get<double>(v.max_val);
+            p["range"] = {std::get<double>(v.min_val), std::get<double>(v.max_val)};
             p["step"] = std::get<double>(v.step);
         }
         p["default"] = v.default_val.index() == 0 ? std::get<int>(v.default_val) : std::get<double>(v.default_val);
@@ -326,7 +351,7 @@ Configuration bayesian_optimization(
         }
         std::ofstream hf(hist_file); hf << jhist.dump(); hf.close();
         // Call Python script to get next config
-        std::string py_cmd = "uv run ../src/bo_runner.py " + param_file + " " + hist_file;
+        std::string py_cmd = std::string("uv run ../src/bo_runner.py ") + "../build/" + param_file + " ../build/" + hist_file;
         FILE* pipe = popen(py_cmd.c_str(), "r");
         if (!pipe) { std::cerr << "Failed to run Python BO script!" << std::endl; break; }
         char buffer[4096];
@@ -338,8 +363,11 @@ Configuration bayesian_optimization(
         Configuration next_cfg;
         for (auto& [k, v] : jnext.items()) {
             if (!space.count(k)) continue;
-            if (space.at(k).type == "int") next_cfg[k] = v.get<int>();
-            else next_cfg[k] = v.get<double>();
+            if (space.at(k).type == "int") {
+                next_cfg[k] = quantize_param(space.at(k), v.get<int>());
+            } else {
+                next_cfg[k] = quantize_param(space.at(k), v.get<double>());
+            }
         }
         double sc = evaluate_configuration(solver_name, next_cfg, instance_files, num_runs_per_instance, time_penalty_factor);
         history.push_back({next_cfg, sc});

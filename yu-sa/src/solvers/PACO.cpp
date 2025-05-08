@@ -132,7 +132,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                 std::vector<int> curr_perm = best_perm;
                 double curr_obj = best_obj;
                 std::uniform_real_distribution<> prob(0.0, 1.0);
-                for (int ls_iter = 0; ls_iter < 10; ++ls_iter) {
+                for (int ls_iter = 0; ls_iter < params.LS; ++ls_iter) {
                     std::vector<int> neighbor = curr_perm;
                     int n = neighbor.size();
                     if (n > 1) {

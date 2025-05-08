@@ -2,6 +2,7 @@ import sys
 import json
 from skopt.space import Integer, Real
 from skopt import Optimizer
+import os
 
 def load_paramspace(param_file):
     with open(param_file, 'r') as f:
@@ -10,15 +11,18 @@ def load_paramspace(param_file):
     param_names = []
     for k, v in paramspace.items():
         if not v.get("tune", True):
+            # print(f"Skipping parameter '{k}' as it is not tunable.")
             continue
         rng = v.get("range", [])
         if not rng or (len(rng) == 2 and rng[0] == rng[1]):
+            # print(f"Skipping parameter '{k}' as it has a fixed or empty range.")
             continue  # skip fixed or empty range
         if v["type"] == "int":
             search_space.append(Integer(rng[0], rng[1], name=k))
         elif v["type"] == "float":
             search_space.append(Real(rng[0], rng[1], name=k))
         else:
+            # print(f"Skipping parameter '{k}' as it has an unsupported type '{v['type']}'.")
             continue
         param_names.append(k)
     return search_space, param_names, paramspace
@@ -43,12 +47,20 @@ def main():
     try:
         param_file = sys.argv[1]
         hist_file = sys.argv[2]
+        # Check if files exist before loading
+        if not os.path.isfile(param_file):
+            print(f"Error: Parameter space file '{param_file}' does not exist.", file=sys.stderr)
+            sys.exit(4)
+        if not os.path.isfile(hist_file):
+            print(f"Error: History file '{hist_file}' does not exist.", file=sys.stderr)
+            sys.exit(5)
         search_space, param_names, paramspace = load_paramspace(param_file)
         # If no tunable parameters, just return defaults
         if not search_space:
-            next_config = {k: v["default"] for k, v in paramspace.items()}
-            print(json.dumps(next_config))
-            return
+            print("Error: No tunable parameters found in the parameter space.", file=sys.stderr)
+            # Print current dir
+            print("Current directory:", os.getcwd(), file=sys.stderr)
+            sys.exit(3)
         X, y = load_history(hist_file, param_names)
         opt = Optimizer(
             dimensions=search_space,
