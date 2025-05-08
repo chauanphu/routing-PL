@@ -111,9 +111,9 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.aco_params.stagnation_limit = aco_params_node["stagnation_limit"] ? aco_params_node["stagnation_limit"].as<int>() : 10;
         params.aco_params.p = aco_params_node["p"] ? aco_params_node["p"].as<double>() : 0.1;
     } else if (params.solver_name == "paco") {
-        auto paco_params_node = params.config[params.exp_size]["paco_params"];
+        auto paco_params_node = params.config[params.exp_size]["params"];
         if (!paco_params_node) {
-            std::cerr << "paco not found in " << params_yaml << std::endl;
+            std::cerr << "params not found in " << params_yaml << std::endl;
             exit(1);
         }
         params.paco_params.m = paco_params_node["m"].as<int>();

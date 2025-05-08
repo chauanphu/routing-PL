@@ -79,7 +79,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
 
     // Solver-specific params
     if (params.solver_name == "sa") {
-        auto sa_params_node = params.config[params.exp_size]["sa_params"];
+        auto sa_params_node = params.config[params.exp_size]["params"];
         params.sa_params.max_iter = sa_params_node["max_iter"].as<int>();
         params.sa_params.T0 = sa_params_node["T0"].as<double>();
         params.sa_params.Tf = sa_params_node["Tf"].as<double>();
@@ -88,7 +88,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.sa_params.patience = sa_params_node["patience"].as<int>();
         params.sa_params.p = sa_params_node["p"].as<double>();
     } else if (params.solver_name == "ga") {
-        auto ga_params_node = params.config[params.exp_size]["ga_params"];
+        auto ga_params_node = params.config[params.exp_size]["params"];
         if (!ga_params_node) {
             std::cerr << "ga_params not found in " << params_yaml << std::endl;
             exit(1);
@@ -99,9 +99,9 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.ga_params.mutation_rate = ga_params_node["mutation_rate"].as<double>();
         params.ga_params.p = ga_params_node["p"].as<double>();
     } else if (params.solver_name == "aco-ts") {
-        auto aco_params_node = params.config[params.exp_size]["paco_params"];
+        auto aco_params_node = params.config[params.exp_size]["params"];
         if (!aco_params_node) {
-            std::cerr << "paco_params not found in " << params_yaml << std::endl;
+            std::cerr << "aco-ts not found in " << params_yaml << std::endl;
             exit(1);
         }
         params.aco_params.num_ants = aco_params_node["num_ants"].as<int>();
@@ -112,7 +112,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         params.aco_params.Q = aco_params_node["Q"].as<double>();
         params.aco_params.p = aco_params_node["p"].as<double>();
     } else if (params.solver_name == "paco") {
-        auto paco_node = params.config[params.exp_size]["paco_params"];
+        auto paco_node = params.config[params.exp_size]["params"];
         params.paco_params.m = paco_node["m"].as<int>();
         params.paco_params.I = paco_node["I"].as<int>();
         params.paco_params.alpha = paco_node["alpha"].as<double>();
@@ -147,7 +147,7 @@ void print_params(const ExperimentParams& params) {
         std::cout << "  p: " << params.ga_params.p << std::endl;
     } else if (params.solver_name == "aco-ts") {
         std::cout << "ACO-TS Parameters:" << std::endl;
-        auto aco_params_node = params.config[params.exp_size]["paco_params"];
+        auto aco_params_node = params.config[params.exp_size]["params"];
         std::cout << "  num_ants: " << aco_params_node["num_ants"].as<int>() << std::endl;
         std::cout << "  num_iterations: " << aco_params_node["num_iterations"].as<int>() << std::endl;
         std::cout << "  alpha: " << aco_params_node["alpha"].as<double>() << std::endl;
@@ -157,7 +157,7 @@ void print_params(const ExperimentParams& params) {
         std::cout << "  p: " << aco_params_node["p"].as<double>() << std::endl;
     } else if (params.solver_name == "paco") {
         std::cout << "3D ACO Parameters:" << std::endl;
-        auto paco_node = params.config[params.exp_size]["paco_params"];
+        auto paco_node = params.config[params.exp_size]["params"];
         std::cout << "  num_ants: " << paco_node["m"].as<int>() << std::endl;
         std::cout << "  num_iterations: " << paco_node["I"].as<int>() << std::endl;
         std::cout << "  alpha: " << paco_node["alpha"].as<double>() << std::endl;
@@ -257,7 +257,7 @@ int main(int argc, char* argv[]) {
         sol = GA::solve(instance, params.ga_params);
     } else if (params.solver_name == "aco-ts") {
         ACOTSParams aco_params;
-        auto aco_node = params.config[size]["paco_params"];
+        auto aco_node = params.config[size]["params"];
         aco_params.num_ants = aco_node["num_ants"].as<int>();
         aco_params.num_iterations = aco_node["num_iterations"].as<int>();
         aco_params.alpha = aco_node["alpha"].as<double>();
@@ -267,7 +267,7 @@ int main(int argc, char* argv[]) {
         aco_params.p = aco_node["p"].as<double>();
         sol = ACO_TS::solve(instance, aco_params, true);
     } else if (params.solver_name == "paco") {
-        auto paco_node = params.config[size]["paco_params"];
+        auto paco_node = params.config[size]["params"];
         params.paco_params.m = paco_node["m"].as<int>();
         params.paco_params.I = paco_node["I"].as<int>();
         params.paco_params.alpha = paco_node["alpha"].as<double>();

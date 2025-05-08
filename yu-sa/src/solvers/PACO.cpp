@@ -204,8 +204,8 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
         // std::cout << "[PACO] Best solution so far: " << global_best_obj << std::endl;
     }
     if (history) {
-        std::filesystem::create_directories("src/output/experiment");
-        std::ofstream csv("src/output/experiment/paco.cvr.csv");
+        std::filesystem::create_directories("../output/experiment");
+        std::ofstream csv("../output/experiment/paco.cvr.csv");
         csv << "iter,best_objective\n";
         for (size_t i = 0; i < convergence_history.size(); ++i) {
             csv << i << "," << convergence_history[i] << "\n";

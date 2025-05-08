@@ -76,6 +76,9 @@
         "__split_buffer": "cpp",
         "__tree": "cpp",
         "queue": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "any": "cpp",
+        "forward_list": "cpp",
+        "ranges": "cpp"
     }
 }

@@ -1,5 +1,5 @@
 small:
-  data_dir: data/25/
+  data_dir: ../data/25
   params:
     Q: 1.2807451356745072
     alpha: 3.60589576591767
