@@ -6,9 +6,10 @@ parameters:
     step: 5
   I:
     type: int
-    range: [50, 100]
-    default: 100
+    range: [30, 30]
+    default: 30
     step: 50
+    tune: false
   alpha:
     type: float
     range: [0.5, 3.0]

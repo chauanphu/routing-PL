@@ -50,7 +50,8 @@ Configuration paramils(
     int s, // Perturbations per iteration
     double p_restart, // Restart probability
     double time_penalty_factor,
-    int verbose_level // Add verbose level
+    int verbose_level, // Add verbose level
+    const std::string& output_file // File to save best config immediately
 );
 void save_configuration(const std::string& filename, const std::string& solver_name, const Configuration& config);
 
@@ -404,7 +405,8 @@ Configuration paramils(
     int s,
     double p_restart,
     double time_penalty_factor,
-    int verbose_level // Add verbose level
+    int verbose_level, // Add verbose level
+    const std::string& output_file // File to save best config immediately
 ) {
     std::random_device rd;
     std::mt19937 rng(rd());
@@ -435,6 +437,8 @@ Configuration paramils(
             if (better(c0_score, overall_best_score)) {
                 overall_best_config = c0_config;
                 overall_best_score = c0_score;
+                save_configuration(output_file, solver_name, overall_best_config);
+                if (verbose_level >= 1) std::cout << "  Exported new overall best to " << output_file << std::endl;
             }
         }
     }
@@ -452,6 +456,8 @@ Configuration paramils(
         if (verbose_level >= 1) std::cout << "Initial IFI improved overall best (" << overall_best_score << " -> " << c_ils_score << ")" << std::endl;
         overall_best_config = c_ils_config;
         overall_best_score = c_ils_score;
+        save_configuration(output_file, solver_name, overall_best_config);
+        if (verbose_level >= 1) std::cout << "Exported new overall best to " << output_file << std::endl;
     }
 
     if (verbose_level >= 1) std::cout << "\n--- Starting ParamILS Main Loop (Max Evals: " << max_evaluations << ") ---" << std::endl;
@@ -497,6 +503,8 @@ Configuration paramils(
                 if (verbose_level >= 1) std::cout << "  *** New overall best found! ***" << std::endl;
                 overall_best_config = c_ils_config;
                 overall_best_score = c_ils_score;
+                save_configuration(output_file, solver_name, overall_best_config);
+                if (verbose_level >= 1) std::cout << "  Exported new overall best to " << output_file << std::endl;
             }
         } else {
              if (verbose_level >= 2) std::cout << "  Acceptance: Did not improve ILS best (" << c_double_prime_score << " vs " << c_ils_score << ")" << std::endl;
@@ -521,6 +529,8 @@ Configuration paramils(
                  if (verbose_level >= 1) std::cout << "    *** Restart resulted in new overall best! ***" << std::endl;
                 overall_best_config = c_ils_config;
                 overall_best_score = c_ils_score;
+                save_configuration(output_file, solver_name, overall_best_config);
+                if (verbose_level >= 1) std::cout << "    Exported new overall best to " << output_file << std::endl;
             }
              if (evaluations_count >= max_evaluations) break;
         }
@@ -661,7 +671,8 @@ int main(int argc, char* argv[]) {
         s,
         p_restart,
         time_penalty_factor,
-        verbose_level // Pass verbose level
+        verbose_level, // Pass verbose level
+        output_file // For immediate export
     );
 
     // Ensure the output directory exists
