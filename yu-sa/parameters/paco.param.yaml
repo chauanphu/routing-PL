@@ -15,14 +15,14 @@ small:
 medium:
   data_dir: ../data/50
   paco_params:
-    m: 1024
     I: 30
-    alpha: 1.0
-    beta: 1.0
-    rho: 0.44
-    Q: 1.0
-    t: 50
-    p: 16
+    Q: 1.0382324756536001
+    alpha: 1.0193015397345566
+    beta: 1.6298299840787156
+    m: 906
+    p: 64
+    rho: 0.89246092712793534
+    t: 15
   num_runs: 1
   output_csv: ../output/solutions/medium_paco.csv
 

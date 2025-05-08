@@ -1,9 +1,9 @@
 parameters:
   num_ants:
     type: int
-    range: [100, 1000]
-    default: 500
-    step: 100
+    range: [100, 300]
+    default: 200
+    step: 50
   num_iterations:
     type: int
     range: [10, 100]

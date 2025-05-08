@@ -7,6 +7,7 @@
 #include <random>
 #include <numeric>
 #include <iostream>
+#include <filesystem>
 
 PACOParams PACO::load_params(const std::string& filename) {
     PACOParams params;
@@ -110,6 +111,8 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
                 if (!mask[i][j][o]) tau[i][j][o] = 0.0;
     Solution global_best;
     double global_best_obj = std::numeric_limits<double>::max();
+    std::vector<double> convergence_history;
+    convergence_history.push_back(global_best_obj);
     for (int iter = 0; iter < I; ++iter) {
         // std::cout << "[PACO] Iteration " << iter << std::endl;
         std::vector<Solution> all_solutions(m);
@@ -197,8 +200,18 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params) {
             global_best = all_solutions[best_idx];
             global_best_obj = all_objs[best_idx];
         }
+        // Record best objective at this iteration
+        convergence_history.push_back(global_best_obj);
         // std::cout << "[PACO] Best solution so far: " << global_best_obj << std::endl;
     }
+    // Write convergence history to CSV
+    std::filesystem::create_directories("../output/experiment");
+    std::ofstream csv("../output/experiment/paco.cvr.csv");
+    csv << "iter,best_objective\n";
+    for (size_t i = 0; i < convergence_history.size(); ++i) {
+        csv << i << "," << convergence_history[i] << "\n";
+    }
+    csv.close();
     // std::cout << "[PACO] Done. Returning best solution." << std::endl;
     return global_best;
 }

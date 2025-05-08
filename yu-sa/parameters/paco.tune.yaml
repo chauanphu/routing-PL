@@ -1,13 +1,13 @@
 parameters:
   m:
     type: int
-    range: [128, 512]
-    default: 20
-    step: 5
+    range: [1024, 6400]
+    default: 3200
+    step: 1024
   I:
     type: int
     range: [30, 30]
-    default: 30
+    default: 50
     step: 50
     tune: false
   alpha:
@@ -38,7 +38,8 @@ parameters:
   p:
     type: int
     range: [32, 32]
-    default: 32
+    default: 64
     step: 1
+    tune: false
 
 # num_elitist is calculated within the solver based on num_ants, so not included here for tuning

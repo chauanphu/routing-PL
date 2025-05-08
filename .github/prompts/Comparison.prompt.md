@@ -9,10 +9,4 @@ Imagine you are a diligent researcher in Optimization Algorithm. I am proposing 
 The experiment measure the change in best objective over iteration of each solver
 
 1. Each solver will record their history: iter, best_objective
-2. Output the results to 'src/output/experiment/<solver>.cvg.cvs`
-
-## Runtime
-
-The experiment measure the change in best objective over iteration of each solver
-
-## Quality
+2. Output the results to 'src/output/experiment/<solver>.cvr.csv`

@@ -3,6 +3,8 @@
 #include <limits>
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 
 // Helper: initialize delivery node mapping for each customer
 static void initialize_customer2node(const VRPInstance& instance, std::unordered_map<int, int>& customer2node, double p, std::mt19937& gen) {
@@ -320,6 +322,9 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params) {
     best_sol.objective_value = 1e12;
     int stagnation = 0;
     bool tabu_applied = false;
+    // Convergence history
+    std::vector<double> convergence_history;
+    convergence_history.push_back(best_sol.objective_value);
     for (int iter = 0; iter < params.num_iterations; ++iter) {
         std::vector<Solution> ant_sols(params.num_ants);
         for (int k = 0; k < params.num_ants; ++k) {
@@ -362,7 +367,17 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params) {
             stagnation = 0;
             tabu_applied = true;
         }
+        // Record best objective at this iteration
+        convergence_history.push_back(best_sol.objective_value);
         // std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
     }
+    // Write convergence history to CSV
+    std::filesystem::create_directories("../output/experiment");
+    std::ofstream csv("../output/experiment/aco-ts.cvr.csv");
+    csv << "iter,best_objective\n";
+    for (size_t i = 0; i < convergence_history.size(); ++i) {
+        csv << i << "," << convergence_history[i] << "\n";
+    }
+    csv.close();
     return best_sol;
 }

@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <random>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 
 // Helper: initialize the initial solution for SA
 static void initialize_solution(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int, int>& customer2node, double p = 0.5) {
@@ -93,7 +95,9 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> prob(0.0, 1.0);
     int n = customer_perm.size();
-    // std::cout << "SA Start: initial objective = " << sigma_best.objective_value << std::endl;
+    // Convergence history
+    std::vector<double> convergence_history;
+    convergence_history.push_back(sigma_best.objective_value);
     while (R < params.patience && T > params.Tf) {
         for (int iter = 0; iter < params.max_iter; ++iter) {
             std::vector<int> new_perm = customer_perm;
@@ -102,7 +106,6 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
             if (r <= 1.0/3) {
                 int i = gen() % n, j = gen() % n;
                 if (i != j) std::swap(new_perm[i], new_perm[j]);
-                // std::cout << "[Iter " << iter << "] Swap: " << i << " <-> " << j << std::endl;
             } else if (r <= 2.0/3) {
                 int i = gen() % n, j = gen() % n;
                 if (i != j) {
@@ -110,47 +113,48 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
                     new_perm.erase(new_perm.begin() + i);
                     new_perm.insert(new_perm.begin() + j, val);
                 }
-                // std::cout << "[Iter " << iter << "] Insertion: " << i << " -> " << j << std::endl;
             } else {
                 int i = gen() % n, j = gen() % n;
                 if (i > j) std::swap(i, j);
                 if (i != j) std::reverse(new_perm.begin() + i, new_perm.begin() + j + 1);
-                // std::cout << "[Iter " << iter << "] Inversion: " << i << " - " << j << std::endl;
             }
             // Evaluate
             Solution sigma_new = Solver::evaluate(instance, new_perm, customer2node);
             double theta = sigma_new.objective_value - sigma_current.objective_value;
-            // std::cout << "  Current obj: " << sigma_current.objective_value << ", New obj: " << sigma_new.objective_value << ", Best obj: " << sigma_best.objective_value << std::endl;
             if (theta <= 0) {
                 sigma_current = sigma_new;
                 customer_perm = new_perm;
-                // std::cout << "  Accepted (improved or equal)" << std::endl;
             } else {
                 double r2 = prob(gen);
                 double accept_prob = std::exp(-theta / (params.beta * T));
                 if (r2 < accept_prob) {
                     sigma_current = sigma_new;
                     customer_perm = new_perm;
-                    // std::cout << "  Accepted (worse, prob=" << accept_prob << ")" << std::endl;
-                } else {
-                    // std::cout << "  Rejected (worse)" << std::endl;
                 }
             }
             if (sigma_new.objective_value < sigma_best.objective_value) {
                 sigma_best = sigma_new;
                 R = 0;
                 FBS = true;
-                // std::cout << "  New best found: " << sigma_best.objective_value << std::endl;
             }
         }
         T *= params.alpha;
-        // std::cout << "Temperature decreased to " << T << ", R = " << R << std::endl;
+        // Record best objective at this temperature update
+        convergence_history.push_back(sigma_best.objective_value);
         if (FBS) {
             FBS = false;
         } else {
             R += 1;
         }
     }
+    // Write convergence history to CSV
+    std::filesystem::create_directories("../output/experiment");
+    std::ofstream csv("../output/experiment/sa.cvr.csv");
+    csv << "iter,best_objective\n";
+    for (size_t i = 0; i < convergence_history.size(); ++i) {
+        csv << i << "," << convergence_history[i] << "\n";
+    }
+    csv.close();
     return sigma_best;
 }
 

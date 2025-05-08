@@ -12,7 +12,7 @@ small:
   output_csv: ../output/solutions/small.csv
 
 medium:
-  data_dir: data/50
+  data_dir: ../data/50
   sa_params:
     max_iter: 32000
     T0: 20.0
@@ -25,9 +25,9 @@ medium:
   output_csv: output/solutions/medium.csv
 
 large:
-  data_dir: data/100
+  data_dir: ../data/100
   sa_params:
-    max_iter: 1000
+    max_iter: 100000
     T0: 30.0
     Tf: 0.01
     alpha: 0.99
