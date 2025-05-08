@@ -18,5 +18,5 @@ struct ACOTSParams {
 
 class ACO_TS {
 public:
-    static Solution solve(const VRPInstance& instance, const ACOTSParams& params);
+    static Solution solve(const VRPInstance& instance, const ACOTSParams& params, bool history = false);
 };

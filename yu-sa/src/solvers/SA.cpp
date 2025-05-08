@@ -85,7 +85,7 @@ static void initialize_solution(const VRPInstance& instance, std::vector<int>& c
     }
 }
 
-Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params) {
+Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history) {
     Solution sigma_best = Solver::evaluate(instance, customer_perm, customer2node);
     Solution sigma_current = sigma_best;
     int R = 0;
@@ -95,9 +95,8 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> prob(0.0, 1.0);
     int n = customer_perm.size();
-    // Convergence history
     std::vector<double> convergence_history;
-    convergence_history.push_back(sigma_best.objective_value);
+    if (history) convergence_history.push_back(sigma_best.objective_value);
     while (R < params.patience && T > params.Tf) {
         for (int iter = 0; iter < params.max_iter; ++iter) {
             std::vector<int> new_perm = customer_perm;
@@ -139,29 +138,39 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
             }
         }
         T *= params.alpha;
-        // Record best objective at this temperature update
-        convergence_history.push_back(sigma_best.objective_value);
+        if (history) convergence_history.push_back(sigma_best.objective_value);
         if (FBS) {
             FBS = false;
         } else {
             R += 1;
         }
     }
-    // Write convergence history to CSV
-    std::filesystem::create_directories("../output/experiment");
-    std::ofstream csv("../output/experiment/sa.cvr.csv");
-    csv << "iter,best_objective\n";
-    for (size_t i = 0; i < convergence_history.size(); ++i) {
-        csv << i << "," << convergence_history[i] << "\n";
+    if (history) {
+        std::filesystem::create_directories("src/output/experiment");
+        std::ofstream csv("src/output/experiment/sa.cvr.csv");
+        csv << "iter,best_objective\n";
+        for (size_t i = 0; i < convergence_history.size(); ++i) {
+            csv << i << "," << convergence_history[i] << "\n";
+        }
+        csv.close();
     }
-    csv.close();
     return sigma_best;
 }
 
-Solution SA::solve(const VRPInstance& instance, const SAParams& params) {
+// Keep the original solve overloads for backward compatibility
+Solution SA::solve(const VRPInstance& instance) {
+    SAParams params;
+    return solve(instance, params, false);
+}
+
+Solution SA::solve(const VRPInstance& instance, const SAParams& params, bool history) {
     int n = instance.num_customers;
     std::vector<int> customer_perm;
     std::unordered_map<int, int> customer2node;
     initialize_solution(instance, customer_perm, customer2node, params.p);
-    return iterate(instance, customer_perm, customer2node, params);
+    return iterate(instance, customer_perm, customer2node, params, history);
+}
+
+Solution SA::solve(const VRPInstance& instance, const SAParams& params) {
+    return solve(instance, params, false);
 }

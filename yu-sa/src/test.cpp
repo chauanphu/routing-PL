@@ -252,7 +252,7 @@ int main(int argc, char* argv[]) {
     Solution sol;
     auto start = std::chrono::high_resolution_clock::now();
     if (params.solver_name == "sa") {
-        sol = SA::solve(instance, params.sa_params);
+        sol = SA::solve(instance, params.sa_params, true);
     } else if (params.solver_name == "ga") {
         sol = GA::solve(instance, params.ga_params);
     } else if (params.solver_name == "aco-ts") {
@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
         aco_params.rho = aco_node["evaporation_rate"].as<double>();
         aco_params.Q = aco_node["Q"].as<double>();
         aco_params.p = aco_node["p"].as<double>();
-        sol = ACO_TS::solve(instance, aco_params);
+        sol = ACO_TS::solve(instance, aco_params, true);
     } else if (params.solver_name == "paco") {
         auto paco_node = params.config[size]["paco_params"];
         params.paco_params.m = paco_node["m"].as<int>();
@@ -276,7 +276,7 @@ int main(int argc, char* argv[]) {
         params.paco_params.Q = paco_node["Q"].as<double>();
         params.paco_params.t = paco_node["t"].as<int>();
         params.paco_params.p = paco_node["p"].as<int>();
-        sol = PACO::solve(instance, params.paco_params);
+        sol = PACO::solve(instance, params.paco_params, true);
     } else {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);

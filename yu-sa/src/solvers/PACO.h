@@ -18,6 +18,6 @@ struct PACOParams {
 
 class PACO : public Solver {
 public:
-    static Solution solve(const VRPInstance& instance, const PACOParams& params);
+    static Solution solve(const VRPInstance& instance, const PACOParams& params, bool history = false);
     static PACOParams load_params(const std::string& filename);
 };

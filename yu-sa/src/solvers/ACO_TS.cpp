@@ -311,20 +311,18 @@ static Solution tabu_search(const VRPInstance& instance, const std::vector<int>&
     return best;
 }
 
-Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params) {
+Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params, bool history) {
     int n = instance.num_customers;
     int m = instance.num_vehicles;
     int num_nodes = n + instance.num_lockers + 1;
     std::mt19937 gen(std::random_device{}());
-    // Pheromone matrix (node x node)
     std::vector<std::vector<double>> tau(num_nodes, std::vector<double>(num_nodes, 1.0));
     Solution best_sol;
     best_sol.objective_value = 1e12;
     int stagnation = 0;
     bool tabu_applied = false;
-    // Convergence history
     std::vector<double> convergence_history;
-    convergence_history.push_back(best_sol.objective_value);
+    if (history) convergence_history.push_back(best_sol.objective_value);
     for (int iter = 0; iter < params.num_iterations; ++iter) {
         std::vector<Solution> ant_sols(params.num_ants);
         for (int k = 0; k < params.num_ants; ++k) {
@@ -368,16 +366,17 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params) {
             tabu_applied = true;
         }
         // Record best objective at this iteration
-        convergence_history.push_back(best_sol.objective_value);
+        if (history) convergence_history.push_back(best_sol.objective_value);
         // std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
     }
-    // Write convergence history to CSV
-    std::filesystem::create_directories("../output/experiment");
-    std::ofstream csv("../output/experiment/aco-ts.cvr.csv");
-    csv << "iter,best_objective\n";
-    for (size_t i = 0; i < convergence_history.size(); ++i) {
-        csv << i << "," << convergence_history[i] << "\n";
+    if (history) {
+        std::filesystem::create_directories("src/output/experiment");
+        std::ofstream csv("src/output/experiment/aco-ts.cvr.csv");
+        csv << "iter,best_objective\n";
+        for (size_t i = 0; i < convergence_history.size(); ++i) {
+            csv << i << "," << convergence_history[i] << "\n";
+        }
+        csv.close();
     }
-    csv.close();
     return best_sol;
 }

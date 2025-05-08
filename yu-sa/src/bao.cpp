@@ -116,7 +116,7 @@ Solution run_solver_with_config(const std::string& solver_name, const VRPInstanc
             params.beta = std::get<double>(config.at("beta"));
             params.patience = std::get<int>(config.at("patience"));
             params.p = std::get<double>(config.at("p"));
-            sol = SA::solve(instance, params);
+            sol = SA::solve(instance, params, false);
         } else if (solver_name == "ga") {
             GAParams params;
             params.population_size = std::get<int>(config.at("population_size"));
