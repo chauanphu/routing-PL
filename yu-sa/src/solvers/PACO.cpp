@@ -126,7 +126,6 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
             std::random_device rd; std::mt19937 gen(rd() + tid);
             for (int k = start; k < end; ++k) {
                 auto [perm, customer2node] = paco_construct_solution(instance, tau, params.alpha, params.beta, gen);
-                // Local search (Simulated Annealing style, 3 iterations)
                 std::vector<int> best_perm = perm;
                 double best_obj = Solver::evaluate(instance, best_perm, customer2node, false).objective_value;
                 std::vector<int> curr_perm = best_perm;

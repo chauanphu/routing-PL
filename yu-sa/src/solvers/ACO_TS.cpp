@@ -367,11 +367,11 @@ Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params, b
         }
         // Record best objective at this iteration
         if (history) convergence_history.push_back(best_sol.objective_value);
-        // std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
+        if (history) std::cout << "[ACO] Iter " << iter << ": Best = " << best_sol.objective_value << std::endl;
     }
     if (history) {
-        std::filesystem::create_directories("src/output/experiment");
-        std::ofstream csv("src/output/experiment/aco-ts.cvr.csv");
+        std::filesystem::create_directories("..//output/experiment");
+        std::ofstream csv("../output/experiment/aco-ts.cvr.csv");
         csv << "iter,best_objective\n";
         for (size_t i = 0; i < convergence_history.size(); ++i) {
             csv << i << "," << convergence_history[i] << "\n";
