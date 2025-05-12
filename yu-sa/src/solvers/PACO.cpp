@@ -8,6 +8,7 @@
 #include <numeric>
 #include <iostream>
 #include <filesystem>
+#include <cmath>
 
 PACOParams PACO::load_params(const std::string& filename) {
     PACOParams params;
@@ -113,7 +114,9 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
     double global_best_obj = std::numeric_limits<double>::max();
     std::vector<double> convergence_history;
     if (history) convergence_history.push_back(global_best_obj);
-    for (int iter = 0; iter < I; ++iter) {
+    double rho_ini = params.rho;
+    int non_improved = 0;
+    while (non_improved < I) {
         // std::cout << "[PACO] Iteration " << iter << std::endl;
         std::vector<Solution> all_solutions(m);
         std::vector<double> all_objs(m);
@@ -173,10 +176,13 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
         std::iota(idx.begin(), idx.end(), 0);
         std::partial_sort(idx.begin(), idx.begin()+t, idx.end(), [&](int a, int b){ return all_objs[a] < all_objs[b]; });
         // std::cout << "[PACO] Finished sorting top-t ants." << std::endl;
+        // Adaptive evaporation rate (new formula)
+        auto sigmoid = [](double x) { return 1.0 / (1.0 + std::exp(-x)); };
+        double rho = (sigmoid((non_improved - 0.25*I) / 20.0)) * (1.0 - rho_ini) + rho_ini;
         for (int i = 0; i < n; ++i)
             for (int j = 0; j < n; ++j)
                 for (int o = 0; o < 2; ++o)
-                    tau[i][j][o] *= (1.0 - params.rho);
+                    tau[i][j][o] *= (1.0 - rho);
         // std::cout << "[PACO] Pheromone evaporation done." << std::endl;
         for (int rank = 0; rank < t; ++rank) {
             int k = idx[rank];
@@ -194,13 +200,20 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
             }
         }
         // std::cout << "[PACO] Pheromone update done." << std::endl;
-        if (*std::min_element(all_objs.begin(), all_objs.end()) < global_best_obj) {
+        double min_obj = *std::min_element(all_objs.begin(), all_objs.end());
+        if (min_obj < global_best_obj) {
             int best_idx = std::min_element(all_objs.begin(), all_objs.end()) - all_objs.begin();
             global_best = all_solutions[best_idx];
-            global_best_obj = all_objs[best_idx];
+            global_best_obj = min_obj;
+            non_improved = 0;
+        } else {
+            non_improved++;
         }
         if (history) convergence_history.push_back(global_best_obj);
-        // std::cout << "[PACO] Best solution so far: " << global_best_obj << std::endl;
+        // Best solution so far, Non-improved iterations, and Evaporation rate
+        if (history)  std::cout << "[PACO] Iteration " << non_improved << ": Best solution so far: " << global_best_obj
+                  << ", Non-improved iterations: " << non_improved
+                  << ", Evaporation rate: " << rho << std::endl;
     }
     if (history) {
         std::filesystem::create_directories("../output/experiment");

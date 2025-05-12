@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
+#include <set> // Include set for completed instances
 
 struct ExperimentParams {
     std::string solver_name;
@@ -166,6 +167,24 @@ std::vector<std::string> load_instance_files(const ExperimentParams& params) {
     return instance_files;
 }
 
+// Utility to load completed instance names from CSV
+std::set<std::string> load_completed_instances(const std::string& output_csv) {
+    std::set<std::string> completed;
+    std::ifstream ifs(output_csv);
+    std::string line;
+    // Skip header
+    std::getline(ifs, line);
+    while (std::getline(ifs, line)) {
+        if (line.empty()) continue;
+        auto comma = line.find(',');
+        if (comma != std::string::npos) {
+            std::string instance_name = line.substr(0, comma);
+            completed.insert(instance_name);
+        }
+    }
+    return completed;
+}
+
 void print_params(const ExperimentParams& params) {
     std::cout << "Loaded parameters for experiment size: " << params.exp_size << std::endl;
     if (params.solver_name == "sa") {
@@ -207,10 +226,29 @@ void print_params(const ExperimentParams& params) {
     std::cout << "  data_dir: " << params.data_dir << std::endl;
 }
 
-void run_experiment(const ExperimentParams& params, const std::vector<std::string>& instance_files) {
-    std::ofstream ofs(params.output_csv);
-    ofs << "instance_name,Num Vehicles,Best Distance,AVG Distance,Std Distance,AVG Runtime (s),Std Runtime (s)\n";
+void run_experiment(const ExperimentParams& params, const std::vector<std::string>& instance_files_unsorted) {
+    // Make a sorted copy of instance_files
+    std::vector<std::string> instance_files = instance_files_unsorted;
+    std::sort(instance_files.begin(), instance_files.end());
+    std::set<std::string> completed_instances;
+    bool file_exists = std::filesystem::exists(params.output_csv);
+    if (file_exists) {
+        completed_instances = load_completed_instances(params.output_csv);
+    }
+
+    std::ofstream ofs;
+    if (file_exists) {
+        ofs.open(params.output_csv, std::ios::app);
+    } else {
+        ofs.open(params.output_csv);
+        ofs << "instance_name,Num Vehicles,Best Distance,AVG Distance,Std Distance,AVG Runtime (s),Std Runtime (s)\n";
+    }
     for (const auto& file : instance_files) {
+        std::string instance_name = std::filesystem::path(file).filename().string();
+        if (completed_instances.count(instance_name)) {
+            std::cout << "Skipping already completed instance: " << instance_name << std::endl;
+            continue;
+        }
         std::cout << "\nProcessing instance: " << file << std::endl;
         std::vector<double> distances, runtimes;
         int best_num_vehicles = 0;
@@ -251,7 +289,6 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
         avg_runtime /= runtimes.size();
         for (double t : runtimes) std_runtime += (t - avg_runtime) * (t - avg_runtime);
         std_runtime = sqrt(std_runtime / runtimes.size());
-        std::string instance_name = std::filesystem::path(file).filename().string();
         ofs << instance_name << "," << best_num_vehicles << "," << best_distance << "," << avg_dist << "," << std_dist << "," << avg_runtime << "," << std_runtime << "\n";
         ofs.flush();
         std::cout << "Finished: " << instance_name << " Best: " << best_distance << " Avg: " << avg_dist << std::endl;
