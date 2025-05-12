@@ -25,6 +25,7 @@ struct ExperimentParams {
     int num_runs;
     std::string data_dir;
     YAML::Node config;
+    int verbose = 0;
 };
 
 ExperimentParams parse_params(int argc, char* argv[]) {
@@ -51,8 +52,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         } else if (key == "--output" && i + 1 < argc) {
             params.output_csv = argv[++i];
         } else if ((key == "--verbose" || key == "-v") && i + 1 < argc) {
-            // Optionally handle verbosity here if needed
-            ++i;
+            params.verbose = std::stoi(argv[++i]);
         }
     }
 
@@ -224,6 +224,7 @@ void print_params(const ExperimentParams& params) {
     std::cout << "  num_runs: " << params.num_runs << std::endl;
     std::cout << "  output_csv: " << params.output_csv << std::endl;
     std::cout << "  data_dir: " << params.data_dir << std::endl;
+    std::cout << "  verbose: " << params.verbose << std::endl;
 }
 
 void run_experiment(const ExperimentParams& params, const std::vector<std::string>& instance_files_unsorted) {
@@ -265,7 +266,8 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
             } else if (params.solver_name == "aco-ts") {
                 sol = ACO_TS::solve(instance, params.aco_params);
             } else if (params.solver_name == "paco") {
-                sol = PACO::solve(instance, params.paco_params);
+                std::cout << "[PACO] Starting solve..." << std::endl;
+                sol = PACO::solve(instance, params.paco_params, false, params.verbose);
             } else {
                 std::cerr << "Unknown solver: " << params.solver_name << std::endl;
                 exit(1);

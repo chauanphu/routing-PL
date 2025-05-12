@@ -14,6 +14,7 @@ struct Solution {
 
 class Solver {
 public:
+    int verbose = 0; // Verbosity level (0: no output, 1: some output, 2: detailed output)
     // Construct routes and compute objective given permutation and customer2node mapping
     // Add a flag to select route construction method (default: greedy)
     static Solution evaluate(const VRPInstance& instance,

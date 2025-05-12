@@ -9,6 +9,7 @@
 #include <iostream>
 #include <filesystem>
 #include <cmath>
+#include <set>
 
 PACOParams PACO::load_params(const std::string& filename) {
     PACOParams params;
@@ -23,6 +24,7 @@ PACOParams PACO::load_params(const std::string& filename) {
     params.p = config["p"].as<int>();
     return params;
 }
+
 // Helper: PACO ant solution construction using 3D-ACO transition rule
 static std::pair<std::vector<int>, std::unordered_map<int, int>>
 paco_construct_solution(const VRPInstance& instance,
@@ -83,17 +85,54 @@ paco_construct_solution(const VRPInstance& instance,
     return {perm, customer2node};
 }
 
-Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool history) {
-    // std::cout << "[PACO] Starting solve..." << std::endl;
+// --- GA operators for elitist ants ---
+// Order Crossover (OX) for permutations
+static std::vector<int> order_crossover(const std::vector<int>& parent1, const std::vector<int>& parent2, std::mt19937& gen) {
+    int n = parent1.size();
+    std::uniform_int_distribution<> dist(0, n - 1);
+    int a = dist(gen), b = dist(gen);
+    if (a > b) std::swap(a, b);
+    std::vector<int> child(n, -1);
+    std::set<int> in_child;
+    // Copy slice from parent1
+    for (int i = a; i <= b; ++i) {
+        child[i] = parent1[i];
+        in_child.insert(parent1[i]);
+    }
+    // Fill from parent2
+    int j = (b + 1) % n;
+    for (int k = 0; k < n; ++k) {
+        int idx = (b + 1 + k) % n;
+        if (in_child.count(parent2[idx]) == 0) {
+            child[j] = parent2[idx];
+            in_child.insert(parent2[idx]);
+            j = (j + 1) % n;
+        }
+    }
+    return child;
+}
+
+// Swap mutation
+static void mutate(std::vector<int>& perm, std::mt19937& gen, double mutation_rate = 0.2) {
+    std::uniform_real_distribution<> prob(0.0, 1.0);
+    if (prob(gen) < mutation_rate && perm.size() > 1) {
+        std::uniform_int_distribution<> dist(0, perm.size() - 1);
+        int i = dist(gen), j = dist(gen);
+        if (i != j) std::swap(perm[i], perm[j]);
+    }
+}
+
+Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool history, int verbose) {
+    if (verbose >= 1) std::cout << "[PACO] Starting solve..." << std::endl;
     int n = instance.num_customers + 1; // including depot
     int m = params.m;
     int p = params.p;
     int t = params.t;
     int I = params.I;
-    // std::cout << "[PACO] n=" << n << ", m=" << m << ", p=" << p << ", t=" << t << ", I=" << I << std::endl;
+    if (verbose >= 2) std::cout << "[PACO] n=" << n << ", m=" << m << ", p=" << p << ", t=" << t << ", I=" << I << std::endl;
     std::vector<std::vector<std::vector<double>>> tau(n, std::vector<std::vector<double>>(n, std::vector<double>(2, 1.0)));
     std::vector<std::vector<std::vector<int>>> mask(n, std::vector<std::vector<int>>(n, std::vector<int>(2, 1)));
-    // std::cout << "[PACO] Building feasibility mask..." << std::endl;
+    if (verbose >= 2) std::cout << "[PACO] Building feasibility mask..." << std::endl;
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
             mask[i][j][0] = (i != j) ? 1 : 0;
@@ -105,7 +144,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
             }
         }
     }
-    // std::cout << "[PACO] Applying mask to pheromone matrix..." << std::endl;
+    if (verbose >= 2) std::cout << "[PACO] Applying mask to pheromone matrix..." << std::endl;
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < n; ++j)
             for (int o = 0; o < 2; ++o)
@@ -116,8 +155,9 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
     if (history) convergence_history.push_back(global_best_obj);
     double rho_ini = params.rho;
     int non_improved = 0;
+    int iter = 0;
     while (non_improved < I) {
-        // std::cout << "[PACO] Iteration " << iter << std::endl;
+        if (verbose >= 1) std::cout << "[PACO] Iteration " << iter << std::endl;
         std::vector<Solution> all_solutions(m);
         std::vector<double> all_objs(m);
         #pragma omp parallel num_threads(p)
@@ -155,7 +195,6 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                             if (i != j) std::reverse(neighbor.begin() + i, neighbor.begin() + j + 1);
                         }
                         double neighbor_obj = Solver::evaluate(instance, neighbor, customer2node, false).objective_value;
-                        // Accept only if neighbor is better
                         if (neighbor_obj < curr_obj) {
                             curr_perm = neighbor;
                             curr_obj = neighbor_obj;
@@ -171,49 +210,73 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                 all_objs[k] = sol.objective_value;
             }
         }
-        // std::cout << "[PACO] Finished ant construction." << std::endl;
+        if (verbose >= 2) std::cout << "[PACO] Finished ant construction." << std::endl;
         std::vector<int> idx(m);
         std::iota(idx.begin(), idx.end(), 0);
         std::partial_sort(idx.begin(), idx.begin()+t, idx.end(), [&](int a, int b){ return all_objs[a] < all_objs[b]; });
-        // std::cout << "[PACO] Finished sorting top-t ants." << std::endl;
-        // Adaptive evaporation rate (new formula)
+        if (verbose >= 2) std::cout << "[PACO] Finished sorting top-t ants." << std::endl;
+        std::vector<Solution> elite_solutions(t);
+        std::vector<double> elite_objs(t);
+        for (int i = 0; i < t; ++i) {
+            elite_solutions[i] = all_solutions[idx[i]];
+            elite_objs[i] = all_objs[idx[i]];
+        }
+        int ga_offspring = (3* non_improved) + t;
+        std::vector<Solution> offspring_solutions;
+        std::random_device rd; std::mt19937 gen(rd());
+        for (int i = 0; i < ga_offspring; ++i) {
+            std::uniform_int_distribution<> dist(0, t - 1);
+            int p1 = dist(gen), p2 = dist(gen);
+            const auto& parent1 = elite_solutions[p1].customer_permutation;
+            const auto& parent2 = elite_solutions[p2].customer_permutation;
+            auto child_perm = order_crossover(parent1, parent2, gen);
+            mutate(child_perm, gen, 0.2);
+            auto customer2node = elite_solutions[p1].customer2node;
+            Solution child_sol = Solver::evaluate(instance, child_perm, customer2node, false);
+            offspring_solutions.push_back(child_sol);
+        }
+        std::vector<Solution> combined = elite_solutions;
+        combined.insert(combined.end(), offspring_solutions.begin(), offspring_solutions.end());
+        std::sort(combined.begin(), combined.end(), [](const Solution& a, const Solution& b) {
+            return a.objective_value < b.objective_value;
+        });
         auto sigmoid = [](double x) { return 1.0 / (1.0 + std::exp(-x)); };
-        double rho = (sigmoid((non_improved - 0.25*I) / 20.0)) * (1.0 - rho_ini) + rho_ini;
+        double rho = rho_ini + sigmoid((non_improved - params.I) / 20.0) / 2.0;
         for (int i = 0; i < n; ++i)
             for (int j = 0; j < n; ++j)
                 for (int o = 0; o < 2; ++o)
                     tau[i][j][o] *= (1.0 - rho);
-        // std::cout << "[PACO] Pheromone evaporation done." << std::endl;
+        if (verbose >= 2) std::cout << "[PACO] Pheromone evaporation done." << std::endl;
         for (int rank = 0; rank < t; ++rank) {
-            int k = idx[rank];
-            const auto& perm = all_solutions[k].customer_permutation;
-            const auto& customer2node = all_solutions[k].customer2node;
+            const auto& perm = combined[rank].customer_permutation;
+            const auto& customer2node = combined[rank].customer2node;
+            double obj = combined[rank].objective_value;
             for (size_t s = 1; s < perm.size(); ++s) {
                 int prev = perm[s-1];
                 int curr = perm[s];
-                // Skip depot nodes when updating pheromone and accessing customer2node
                 if (prev == 0 || curr == 0) continue;
                 auto it = customer2node.find(curr);
-                if (it == customer2node.end()) continue; // skip if not found
+                if (it == customer2node.end()) continue;
                 int o = (it->second == curr) ? 0 : 1;
-                tau[prev][curr][o] += params.Q / all_objs[k];
+                tau[prev][curr][o] += params.Q / obj;
             }
         }
-        // std::cout << "[PACO] Pheromone update done." << std::endl;
         double min_obj = *std::min_element(all_objs.begin(), all_objs.end());
         if (min_obj < global_best_obj) {
             int best_idx = std::min_element(all_objs.begin(), all_objs.end()) - all_objs.begin();
             global_best = all_solutions[best_idx];
             global_best_obj = min_obj;
             non_improved = 0;
+            if (verbose >= 1) std::cout << "[PACO] New global best: " << global_best_obj << std::endl;
         } else {
             non_improved++;
         }
         if (history) convergence_history.push_back(global_best_obj);
-        // Best solution so far, Non-improved iterations, and Evaporation rate
-        if (history)  std::cout << "[PACO] Iteration " << non_improved << ": Best solution so far: " << global_best_obj
-                  << ", Non-improved iterations: " << non_improved
-                  << ", Evaporation rate: " << rho << std::endl;
+        if (verbose >= 1) std::cout << "[PACO] Iteration " << iter
+            << ": Best solution so far: " << global_best_obj
+            << ", Non-improved iterations: " << non_improved
+            << ", Evaporation rate: " << rho << std::endl;
+        iter++;
     }
     if (history) {
         std::filesystem::create_directories("../output/experiment");
@@ -224,6 +287,6 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
         }
         csv.close();
     }
-    // std::cout << "[PACO] Done. Returning best solution." << std::endl;
+    if (verbose >= 1) std::cout << "[PACO] Done. Returning best solution." << std::endl;
     return global_best;
 }
