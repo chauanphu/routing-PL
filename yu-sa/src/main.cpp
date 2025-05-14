@@ -266,7 +266,6 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
             } else if (params.solver_name == "aco-ts") {
                 sol = ACO_TS::solve(instance, params.aco_params);
             } else if (params.solver_name == "paco") {
-                std::cout << "[PACO] Starting solve..." << std::endl;
                 sol = PACO::solve(instance, params.paco_params, false, params.verbose);
             } else {
                 std::cerr << "Unknown solver: " << params.solver_name << std::endl;

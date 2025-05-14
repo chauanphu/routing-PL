@@ -156,6 +156,8 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
     double rho_ini = params.rho;
     int non_improved = 0;
     int iter = 0;
+    double rho = rho_ini;
+    auto sigmoid = [](double x) { return 1.0 / (1.0 + std::exp(-x)); };
     while (non_improved < I) {
         if (verbose >= 1) std::cout << "[PACO] Iteration " << iter << std::endl;
         std::vector<Solution> all_solutions(m);
@@ -221,7 +223,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
             elite_solutions[i] = all_solutions[idx[i]];
             elite_objs[i] = all_objs[idx[i]];
         }
-        int ga_offspring = (3* non_improved) + t;
+        int ga_offspring = (I != 0) ? (m * non_improved / I) + t : t;
         std::vector<Solution> offspring_solutions;
         std::random_device rd; std::mt19937 gen(rd());
         for (int i = 0; i < ga_offspring; ++i) {
@@ -240,8 +242,8 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
         std::sort(combined.begin(), combined.end(), [](const Solution& a, const Solution& b) {
             return a.objective_value < b.objective_value;
         });
-        auto sigmoid = [](double x) { return 1.0 / (1.0 + std::exp(-x)); };
-        double rho = rho_ini + sigmoid((non_improved - params.I) / 20.0) / 2.0;
+            // Start exploitation
+        rho = rho_ini + (0.1 - rho_ini) * sigmoid(8 * (static_cast<double>(non_improved) / (params.I / 2) - 0.5));
         for (int i = 0; i < n; ++i)
             for (int j = 0; j < n; ++j)
                 for (int o = 0; o < 2; ++o)

@@ -276,7 +276,15 @@ int main(int argc, char* argv[]) {
         params.paco_params.Q = paco_node["Q"].as<double>();
         params.paco_params.t = paco_node["t"].as<int>();
         params.paco_params.p = paco_node["p"].as<int>();
-        sol = PACO::solve(instance, params.paco_params, true);
+        int verbose = 0;
+        for (int i = 1; i < argc; ++i) {
+            std::string key = argv[i];
+            if ((key == "--verbose" || key == "-v") && i + 1 < argc) {
+                verbose = std::stoi(argv[i + 1]);
+                break;
+            }
+        }
+        sol = PACO::solve(instance, params.paco_params, true, verbose);
     } else {
         std::cerr << "Unknown solver: " << params.solver_name << std::endl;
         exit(1);
