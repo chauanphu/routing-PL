@@ -5,5 +5,4 @@ __init__.py
 notebooks/*.txt
 data/
 build/
-solutions/
 experiment/

@@ -79,6 +79,8 @@
         "stack": "cpp",
         "any": "cpp",
         "forward_list": "cpp",
-        "ranges": "cpp"
+        "ranges": "cpp",
+        "csignal": "cpp",
+        "regex": "cpp"
     }
 }
