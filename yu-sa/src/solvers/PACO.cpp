@@ -174,11 +174,10 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
         {
             int tid = omp_get_thread_num();
             // Calculate ants per thread
-            int ants_per_thread = m / p;
-            int remainder_ants = m % p;
+            int ants_per_thread = m;
             int extra_ants = std::min(non_improved + 1, 8); // Extra ants for exploration
-            int start_ant_idx_global = tid * ants_per_thread + std::min(tid, remainder_ants);
-            int num_ants_this_thread = ants_per_thread * extra_ants + (tid < remainder_ants ? 1 : 0);
+            int start_ant_idx_global = tid * ants_per_thread;
+            int num_ants_this_thread = ants_per_thread * extra_ants;
 
             std::mt19937 thread_rng(rd_global_seed() + tid + iter); // Thread-local RNG
 
@@ -191,7 +190,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                     auto [perm, customer2node_map] = paco_construct_solution(instance, tau, params.alpha, params.beta, thread_rng);
                     
                     std::vector<int> best_perm_ls = perm;
-                    Solution initial_eval_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false);
+                    Solution initial_eval_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false, verbose);
                     double best_obj_ls = initial_eval_sol.objective_value;
                     
                     std::vector<int> curr_perm_ls = best_perm_ls;
@@ -236,7 +235,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                                    std::reverse(neighbor_perm.begin() + i_ls, neighbor_perm.begin() + j_ls + 1);
                                 }
                             }
-                            Solution neighbor_sol_eval = Solver::evaluate(instance, neighbor_perm, customer2node_map, false);
+                            Solution neighbor_sol_eval = Solver::evaluate(instance, neighbor_perm, customer2node_map, false, verbose);
                             double neighbor_obj_ls = neighbor_sol_eval.objective_value;
                             if (neighbor_obj_ls < curr_obj_ls) {
                                 curr_perm_ls = neighbor_perm;
@@ -248,7 +247,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                             }
                         }
                     }
-                    Solution final_ant_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false);
+                    Solution final_ant_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false, verbose);
                     thread_initial_ant_solutions[k_local] = final_ant_sol;
                     thread_initial_ant_objs[k_local] = final_ant_sol.objective_value;
                 }
@@ -329,7 +328,7 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                             mutate(child_permutation, thread_rng, 0.2); // Hardcoded mutation rate
                             
                             auto child_customer2node = parent1_sol.customer2node; // Inherit map
-                            Solution child_solution = Solver::evaluate(instance, child_permutation, child_customer2node, false);
+                            Solution child_solution = Solver::evaluate(instance, child_permutation, child_customer2node, false, verbose);
                             offspring_population.push_back(child_solution);
                         }
                         // Generational replacement with elitism: combine parents and offspring, sort, then truncate
@@ -439,11 +438,11 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                 rho = rho_ini;
             } else {
                 non_improved++;
-                rho = rho_ini + (0.1 - rho_ini) * sigmoid(8 * (static_cast<double>(non_improved) / (std::max(1,I) / 2.0) - 0.5)); // Avoid division by zero if I=0
+                rho = rho_ini + (0.1 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
             }
         } else {
              non_improved++; // No solutions, count as non-improvement
-             rho = rho_ini + (0.1 - rho_ini) * sigmoid(8 * (static_cast<double>(non_improved) / (std::max(1,I) / 2.0) - 0.5)); // Avoid division by zero if I=0
+             rho = rho_ini + (0.1 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
         }
 
         if (history) convergence_history.push_back(global_best_obj);

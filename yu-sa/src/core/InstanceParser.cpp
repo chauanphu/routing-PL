@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <algorithm> // For std::any_of
 
 VRPInstance InstanceParser::parse(const std::string& filename) {
     VRPInstance instance;
@@ -65,6 +66,18 @@ VRPInstance InstanceParser::parse(const std::string& filename) {
             int val; iss >> val; prefs.push_back(val);
         }
         instance.customer_preferences.push_back(prefs);
+    }
+    // Validation: check locker assignment rules
+    for (int i = 0; i < instance.num_customers; ++i) {
+        int type = instance.customers[i]->customer_type;
+        const auto& prefs = instance.customer_preferences[i];
+        bool any_assigned = std::any_of(prefs.begin(), prefs.end(), [](int v){ return v == 1; });
+        if ((type == 2 || type == 3) && !any_assigned) {
+            throw std::runtime_error("Customer " + std::to_string(i+1) + " (type-II or III) must have at least one locker assigned.");
+        }
+        if (type == 1 && any_assigned) {
+            throw std::runtime_error("Customer " + std::to_string(i+1) + " (type-I) must not have any locker assigned.");
+        }
     }
     return instance;
 }

@@ -12,7 +12,7 @@ struct RouteResult {
     bool feasible;
 };
 
-static RouteResult construct_routes(const VRPInstance& instance, const std::vector<int>& customer_perm, const std::unordered_map<int, int>& customer2node) {
+static RouteResult construct_routes(const VRPInstance& instance, const std::vector<int>& customer_perm, const std::unordered_map<int, int>& customer2node, int verbose = 0) {
     int n = instance.num_customers;
     int m = instance.num_vehicles;
     int cap = instance.vehicle_capacity;
@@ -27,6 +27,7 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
     double total_distance = 0.0;
     std::unordered_set<int> visited_lockers;
     int last_node = depot_id;
+    int count_capacity = 0, count_time = 0, count_duplicate = 0, count_total = 0;
     for (int idx = 0; idx < n; ++idx) {
         int cust_id = customer_perm[idx];
         int cust_idx = cust_id - 1;
@@ -51,8 +52,17 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
                 duplicate_locker = true;
             }
         }
-        bool violates = (load + demand > cap) || (arr_time > late) || duplicate_locker;
+        bool cap_viol = (load + demand > cap);
+        bool time_viol = (arr_time > late);
+        bool violates = cap_viol || time_viol || duplicate_locker;
         if (violates) {
+            if (cap_viol) count_capacity++;
+            if (time_viol){
+                // if (verbose >= 3) std::cout << "Time violation: " << arr_time << " > " << late << std::endl;
+                count_time++;
+            }
+            if (duplicate_locker) count_duplicate++;
+            count_total++;
             // End current route, return to depot
             if (curr_node != depot_id) {
                 total_distance += instance.distance_matrix[curr_node][depot_id];
@@ -64,7 +74,6 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
                 feasible = false;
                 break;
             }
-            // Start new vehicle/route
             route = {depot_id};
             load = 0;
             curr_node = depot_id;
@@ -91,7 +100,16 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
         route.push_back(depot_id);
         routes.push_back(route);
     }
-    if (!feasible) total_distance = 1e9;
+    if (!feasible) {
+        total_distance = 1e9;
+        if (verbose >= 3 && count_total > 0) {
+            std::cout << "[Debug] Proportion of violated constraints: "
+                      << "capacity=" << (double)count_capacity/count_total
+                      << ", time=" << (double)count_time/count_total
+                      << ", duplicate_locker=" << (double)count_duplicate/count_total
+                      << " (total violations: " << count_total << ")" << std::endl;
+        }
+    }
     return {routes, total_distance, feasible};
 }
 
@@ -187,7 +205,7 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
     return {routes, total_distance, feasible};
 }
 
-Solution Solver::evaluate(const VRPInstance& instance, const std::vector<int>& customer_perm, const std::unordered_map<int, int>& customer2node, bool use_delimiter) {
+Solution Solver::evaluate(const VRPInstance& instance, const std::vector<int>& customer_perm, const std::unordered_map<int, int>& customer2node, bool use_delimiter, int verbose) {
     int n = instance.num_customers;
     std::vector<int> delivery_nodes(n);
     for (int i = 0; i < n; ++i) {
@@ -196,7 +214,7 @@ Solution Solver::evaluate(const VRPInstance& instance, const std::vector<int>& c
     }
     RouteResult route_result = use_delimiter
         ? construct_routes_delimiter(instance, customer_perm, customer2node)
-        : construct_routes(instance, customer_perm, customer2node);
+        : construct_routes(instance, customer_perm, customer2node, verbose);
     Solution sol;
     sol.routes = route_result.routes;
     sol.delivery_nodes = delivery_nodes;
