@@ -176,8 +176,9 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
             // Calculate ants per thread
             int ants_per_thread = m / p;
             int remainder_ants = m % p;
+            int extra_ants = std::min(non_improved + 1, 8); // Extra ants for exploration
             int start_ant_idx_global = tid * ants_per_thread + std::min(tid, remainder_ants);
-            int num_ants_this_thread = ants_per_thread * (non_improved + 1) + (tid < remainder_ants ? 1 : 0);
+            int num_ants_this_thread = ants_per_thread * extra_ants + (tid < remainder_ants ? 1 : 0);
 
             std::mt19937 thread_rng(rd_global_seed() + tid + iter); // Thread-local RNG
 
@@ -383,7 +384,6 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
         }
 
         // Pheromone evaporation
-        rho = rho_ini + (0.1 - rho_ini) * sigmoid(8 * (static_cast<double>(non_improved) / (std::max(1,I) / 2.0) - 0.5)); // Avoid division by zero if I=0
         for (int i = 0; i < n_nodes; ++i)
             for (int j = 0; j < n_nodes; ++j)
                 for (int o = 0; o < 2; ++o)
@@ -436,11 +436,14 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                 global_best_obj = iteration_final_solutions[0].objective_value;
                 non_improved = 0;
                 if (verbose >= 1) std::cout << "[PACO] New global best: " << global_best_obj << std::endl;
+                rho = rho_ini;
             } else {
                 non_improved++;
+                rho = rho_ini + (0.1 - rho_ini) * sigmoid(8 * (static_cast<double>(non_improved) / (std::max(1,I) / 2.0) - 0.5)); // Avoid division by zero if I=0
             }
         } else {
              non_improved++; // No solutions, count as non-improvement
+             rho = rho_ini + (0.1 - rho_ini) * sigmoid(8 * (static_cast<double>(non_improved) / (std::max(1,I) / 2.0) - 0.5)); // Avoid division by zero if I=0
         }
 
         if (history) convergence_history.push_back(global_best_obj);
