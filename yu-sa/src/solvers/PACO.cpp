@@ -438,11 +438,11 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                 rho = rho_ini;
             } else {
                 non_improved++;
-                rho = rho_ini + (0.1 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
+                rho = rho_ini + (0.2 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
             }
         } else {
              non_improved++; // No solutions, count as non-improvement
-             rho = rho_ini + (0.1 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
+             rho = rho_ini + (0.2 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
         }
 
         if (history) convergence_history.push_back(global_best_obj);

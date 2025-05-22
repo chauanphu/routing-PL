@@ -12,7 +12,7 @@ struct RouteResult {
     bool feasible;
 };
 
-static RouteResult construct_routes(const VRPInstance& instance, const std::vector<int>& customer_perm, const std::unordered_map<int, int>& customer2node, int verbose = 0) {
+static RouteResult construct_routes(const VRPInstance& instance, const std::vector<int>& customer_perm, const std::unordered_map<int, int>& customer2node) {
     int n = instance.num_customers;
     int m = instance.num_vehicles;
     int cap = instance.vehicle_capacity;
@@ -27,7 +27,6 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
     double total_distance = 0.0;
     std::unordered_set<int> visited_lockers;
     int last_node = depot_id;
-    int count_capacity = 0, count_time = 0, count_duplicate = 0, count_total = 0;
     for (int idx = 0; idx < n; ++idx) {
         int cust_id = customer_perm[idx];
         int cust_idx = cust_id - 1;
@@ -52,17 +51,8 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
                 duplicate_locker = true;
             }
         }
-        bool cap_viol = (load + demand > cap);
-        bool time_viol = (arr_time > late);
-        bool violates = cap_viol || time_viol || duplicate_locker;
+        bool violates = (load + demand > cap) || (arr_time > late) || duplicate_locker;
         if (violates) {
-            if (cap_viol) count_capacity++;
-            if (time_viol){
-                // if (verbose >= 3) std::cout << "Time violation: " << arr_time << " > " << late << std::endl;
-                count_time++;
-            }
-            if (duplicate_locker) count_duplicate++;
-            count_total++;
             // End current route, return to depot
             if (curr_node != depot_id) {
                 total_distance += instance.distance_matrix[curr_node][depot_id];
@@ -70,10 +60,11 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
             }
             routes.push_back(route);
             vehicle++;
-            if (vehicle >= m) {
+            if (vehicle > m) {
                 feasible = false;
-                break;
+                // break; // Allow soft penalty for exceeding vehicle limit
             }
+            // Start new vehicle/route
             route = {depot_id};
             load = 0;
             curr_node = depot_id;
@@ -95,21 +86,17 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
         last_node = delivery_node;
     }
     // End last route if not empty
-    if (!route.empty() && curr_node != depot_id && feasible) {
+    // if (!route.empty() && curr_node != depot_id && feasible) {
+    //     total_distance += instance.distance_matrix[curr_node][depot_id];
+    //     route.push_back(depot_id);
+    //     routes.push_back(route);
+    // }
+    if (!route.empty() && curr_node != depot_id) {
         total_distance += instance.distance_matrix[curr_node][depot_id];
         route.push_back(depot_id);
         routes.push_back(route);
     }
-    if (!feasible) {
-        total_distance = 1e9;
-        if (verbose >= 3 && count_total > 0) {
-            std::cout << "[Debug] Proportion of violated constraints: "
-                      << "capacity=" << (double)count_capacity/count_total
-                      << ", time=" << (double)count_time/count_total
-                      << ", duplicate_locker=" << (double)count_duplicate/count_total
-                      << " (total violations: " << count_total << ")" << std::endl;
-        }
-    }
+    // if (!feasible) total_distance = 1e9;
     return {routes, total_distance, feasible};
 }
 
@@ -214,7 +201,7 @@ Solution Solver::evaluate(const VRPInstance& instance, const std::vector<int>& c
     }
     RouteResult route_result = use_delimiter
         ? construct_routes_delimiter(instance, customer_perm, customer2node)
-        : construct_routes(instance, customer_perm, customer2node, verbose);
+        : construct_routes(instance, customer_perm, customer2node);
     Solution sol;
     sol.routes = route_result.routes;
     sol.delivery_nodes = delivery_nodes;
