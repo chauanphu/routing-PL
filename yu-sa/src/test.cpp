@@ -252,7 +252,7 @@ int main(int argc, char* argv[]) {
     Solution sol;
     auto start = std::chrono::high_resolution_clock::now();
     if (params.solver_name == "sa") {
-        sol = SA::solve(instance, params.sa_params, true);
+        sol = SA::solve(instance, params.sa_params, true, 1);
     } else if (params.solver_name == "ga") {
         sol = GA::solve(instance, params.ga_params);
     } else if (params.solver_name == "aco-ts") {

@@ -15,8 +15,10 @@ class SA : public Solver {
 public:
     static Solution solve(const VRPInstance& instance);
     static Solution solve(const VRPInstance& instance, const SAParams& params);
-    static Solution solve(const VRPInstance& instance, const SAParams& params, bool history = false);
+    static Solution solve(const VRPInstance& instance, const SAParams& params, bool history);
+    static Solution solve(const VRPInstance& instance, const SAParams& params, bool history, int verbose);
 private:
     static Solution iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params);
     static Solution iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history);
+    static Solution iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history, int verbose);
 };

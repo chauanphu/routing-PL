@@ -85,8 +85,8 @@ static void initialize_solution(const VRPInstance& instance, std::vector<int>& c
     }
 }
 
-Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history) {
-    Solution sigma_best = Solver::evaluate(instance, customer_perm, customer2node);
+Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history, int verbose) {
+    Solution sigma_best = Solver::evaluate(instance, customer_perm, customer2node, false);
     Solution sigma_current = sigma_best;
     int R = 0;
     double T = params.T0;
@@ -97,6 +97,9 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
     int n = customer_perm.size();
     std::vector<double> convergence_history;
     if (history) convergence_history.push_back(sigma_best.objective_value);
+    if (verbose >= 1) {
+        std::cout << "[SA] Start: Obj = " << sigma_best.objective_value << std::endl;
+    }
     while (R < params.patience && T > params.Tf) {
         for (int iter = 0; iter < params.max_iter; ++iter) {
             std::vector<int> new_perm = customer_perm;
@@ -118,7 +121,7 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
                 if (i != j) std::reverse(new_perm.begin() + i, new_perm.begin() + j + 1);
             }
             // Evaluate
-            Solution sigma_new = Solver::evaluate(instance, new_perm, customer2node);
+            Solution sigma_new = Solver::evaluate(instance, new_perm, customer2node, false);
             double theta = sigma_new.objective_value - sigma_current.objective_value;
             if (theta <= 0) {
                 sigma_current = sigma_new;
@@ -132,6 +135,9 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
                 }
             }
             if (sigma_new.objective_value < sigma_best.objective_value) {
+                if (verbose >= 1) {
+                    std::cout << "[SA] Improved: Iter=" << iter << ", Obj=" << sigma_new.objective_value << std::endl;
+                }
                 sigma_best = sigma_new;
                 R = 0;
                 FBS = true;
@@ -144,6 +150,9 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
         } else {
             R += 1;
         }
+        if (verbose >= 1) {
+            std::cout << "[SA] T=" << T << ", Best Obj=" << sigma_best.objective_value << ", R=" << R << std::endl;
+        }
     }
     if (history) {
         std::filesystem::create_directories("src/output/experiment");
@@ -154,23 +163,38 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
         }
         csv.close();
     }
+    if (verbose >= 1) {
+        std::cout << "[SA] Finished. Best Obj = " << sigma_best.objective_value << std::endl;
+    }
     return sigma_best;
 }
 
 // Keep the original solve overloads for backward compatibility
-Solution SA::solve(const VRPInstance& instance) {
-    SAParams params;
-    return solve(instance, params, false);
-}
-
-Solution SA::solve(const VRPInstance& instance, const SAParams& params, bool history) {
+Solution SA::solve(const VRPInstance& instance, const SAParams& params, bool history, int verbose) {
     int n = instance.num_customers;
     std::vector<int> customer_perm;
     std::unordered_map<int, int> customer2node;
     initialize_solution(instance, customer_perm, customer2node, params.p);
-    return iterate(instance, customer_perm, customer2node, params, history);
+    return iterate(instance, customer_perm, customer2node, params, history, verbose);
+}
+
+Solution SA::solve(const VRPInstance& instance, const SAParams& params, bool history) {
+    return solve(instance, params, history, 0);
 }
 
 Solution SA::solve(const VRPInstance& instance, const SAParams& params) {
-    return solve(instance, params, false);
+    return solve(instance, params, false, 0);
+}
+
+Solution SA::solve(const VRPInstance& instance) {
+    SAParams params;
+    return solve(instance, params, false, 0);
+}
+
+Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params) {
+    return iterate(instance, customer_perm, customer2node, params, false, 0);
+}
+
+Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history) {
+    return iterate(instance, customer_perm, customer2node, params, history, 0);
 }

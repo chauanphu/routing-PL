@@ -1,6 +1,6 @@
 small:
   data_dir: ../data/25
-  sa_params:
+  params:
     max_iter: 6000
     T0: 10.0
     Tf: 0.1
@@ -13,7 +13,7 @@ small:
 
 medium:
   data_dir: ../data/50
-  sa_params:
+  params:
     max_iter: 32000
     T0: 20.0
     Tf: 0.05
@@ -26,7 +26,7 @@ medium:
 
 large:
   data_dir: ../data/100
-  sa_params:
+  params:
     max_iter: 100000
     T0: 30.0
     Tf: 0.01
