@@ -184,189 +184,179 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
             std::vector<Solution> thread_initial_ant_solutions(num_ants_this_thread);
             std::vector<double> thread_initial_ant_objs(num_ants_this_thread);
 
-            if (num_ants_this_thread > 0) {
-                // 1. Ant construction and Local Search for this thread's ants
-                for (int k_local = 0; k_local < num_ants_this_thread; ++k_local) {
-                    auto [perm, customer2node_map] = paco_construct_solution(instance, tau, params.alpha, params.beta, thread_rng);
-                    
-                    std::vector<int> best_perm_ls = perm;
-                    Solution initial_eval_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false, verbose);
-                    double best_obj_ls = initial_eval_sol.objective_value;
-                    
-                    std::vector<int> curr_perm_ls = best_perm_ls;
-                    double curr_obj_ls = best_obj_ls;
-                    
-                    for (int ls_iter_count = 0; ls_iter_count < params.LS; ++ls_iter_count) {
-                        std::vector<int> neighbor_perm = curr_perm_ls;
-                        int n_ls = neighbor_perm.size();
-                        if (n_ls > 1) {
-                            std::uniform_real_distribution<> op_dist(0.0, 1.0);
-                            double r_ls = op_dist(thread_rng);
-                            std::uniform_int_distribution<> idx_dist(0, n_ls - 1);
-                            int i_ls = idx_dist(thread_rng);
-                            int j_ls = idx_dist(thread_rng);
-
-                            if (r_ls < 1.0/3.0) { // Swap
-                                if (i_ls != j_ls) std::swap(neighbor_perm[i_ls], neighbor_perm[j_ls]);
-                            } else if (r_ls < 2.0/3.0) { // Insert
-                                if (i_ls != j_ls && !neighbor_perm.empty()) {
-                                    int val_to_move = neighbor_perm[i_ls];
-                                    neighbor_perm.erase(neighbor_perm.begin() + i_ls);
-                                    // Adjust j_ls to be a valid index for insertion
-                                    int insert_at_idx = j_ls;
-                                    if (neighbor_perm.empty()) {
-                                        insert_at_idx = 0;
-                                    } else if (insert_at_idx > neighbor_perm.size()) {
-                                        insert_at_idx = neighbor_perm.size(); 
-                                    }
-
-                                    if (insert_at_idx == 0 || neighbor_perm.empty()) {
-                                       neighbor_perm.insert(neighbor_perm.begin(), val_to_move);
-                                    } else if (insert_at_idx >= neighbor_perm.size()) {
-                                       neighbor_perm.push_back(val_to_move);
-                                    }
-                                    else {
-                                       neighbor_perm.insert(neighbor_perm.begin() + insert_at_idx, val_to_move);
-                                    }
-                                }
-                            } else { // Reverse (2-opt style)
-                                if (i_ls > j_ls) std::swap(i_ls, j_ls);
-                                if (i_ls != j_ls && i_ls < neighbor_perm.size() && j_ls < neighbor_perm.size() && (j_ls + 1) <= neighbor_perm.size()) {
-                                   std::reverse(neighbor_perm.begin() + i_ls, neighbor_perm.begin() + j_ls + 1);
-                                }
-                            }
-                            Solution neighbor_sol_eval = Solver::evaluate(instance, neighbor_perm, customer2node_map, false, verbose);
-                            double neighbor_obj_ls = neighbor_sol_eval.objective_value;
-                            if (neighbor_obj_ls < curr_obj_ls) {
-                                curr_perm_ls = neighbor_perm;
-                                curr_obj_ls = neighbor_obj_ls;
-                                if (curr_obj_ls < best_obj_ls) {
-                                    best_perm_ls = curr_perm_ls;
-                                    best_obj_ls = curr_obj_ls;
-                                }
-                            }
-                        }
-                    }
-                    Solution final_ant_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false, verbose);
-                    thread_initial_ant_solutions[k_local] = final_ant_sol;
-                    thread_initial_ant_objs[k_local] = final_ant_sol.objective_value;
-                }
-
-                // 2. Initialize GA population for this thread from its best ants
-                int ga_population_size_for_thread = std::max(1, t / p); 
-                if (t < p && t > 0) ga_population_size_for_thread = 1; 
-                if (t == 0) ga_population_size_for_thread = 0; 
-                ga_population_size_for_thread = std::min(ga_population_size_for_thread, num_ants_this_thread);
-
-                std::vector<Solution> current_ga_pop_thread; // This thread's GA population
-                if (num_ants_this_thread > 0 && ga_population_size_for_thread > 0) {
-                    std::vector<int> ant_indices(num_ants_this_thread);
-                    std::iota(ant_indices.begin(), ant_indices.end(), 0);
-                    std::partial_sort(ant_indices.begin(), ant_indices.begin() + ga_population_size_for_thread, ant_indices.end(),
-                                      [&](int a, int b){ return thread_initial_ant_objs[a] < thread_initial_ant_objs[b]; });
-                    for (int i = 0; i < ga_population_size_for_thread; ++i) {
-                        current_ga_pop_thread.push_back(thread_initial_ant_solutions[ant_indices[i]]);
-                    }
-                }
-
-                // 3. Iterative GA with Tournament Selection for this thread
-                std::vector<Solution> solutions_from_thread_ga; // Final output of this thread's GA
-
-                if (!current_ga_pop_thread.empty()) {
-                    const int TOURNAMENT_K_VALUE = 2; // Tournament size
-
-                    // Lambda for tournament selection
-                    auto select_parent_tournament = 
-                        [&](const std::vector<Solution>& pop, int k_tournament, std::mt19937& rng) -> int {
-                        if (pop.empty()) return -1;
-                        if (pop.size() == 1) return 0;
-                        int effective_k = std::min(k_tournament, (int)pop.size());
-                        if (effective_k <= 0) return 0; 
-
-                        int best_idx_in_tournament = -1;
-                        double best_obj_in_tournament = std::numeric_limits<double>::max();
-                        std::uniform_int_distribution<> dist(0, pop.size() - 1);
-
-                        for (int i = 0; i < effective_k; ++i) {
-                            int current_participant_idx = dist(rng);
-                            if (pop[current_participant_idx].objective_value < best_obj_in_tournament) {
-                                best_obj_in_tournament = pop[current_participant_idx].objective_value;
-                                best_idx_in_tournament = current_participant_idx;
-                            }
-                        }
-                        return (best_idx_in_tournament != -1) ? best_idx_in_tournament : dist(rng); // Fallback
-                    };
-
-                    // Determine GA generations for this thread
-                    int ga_gens_base = 2;         // Base generations
-                    int ga_gens_bonus_max = 5;  // Max bonus generations
-                    int num_ga_generations = ga_gens_base;
-                    if (I > 0) { // I is max non-improved iterations for main ACO loop
-                        double non_improve_ratio = static_cast<double>(non_improved) / I;
-                        num_ga_generations += static_cast<int>(std::round(ga_gens_bonus_max * non_improve_ratio));
-                    }
-                    num_ga_generations = std::min(num_ga_generations, ga_gens_base + ga_gens_bonus_max);
-                    num_ga_generations = std::max(1, num_ga_generations); // At least 1 generation
-
-                    for (int gen = 0; gen < num_ga_generations; ++gen) {
-                        if (current_ga_pop_thread.empty() || ga_population_size_for_thread == 0) break;
-
-                        std::vector<Solution> offspring_population;
-                        offspring_population.reserve(ga_population_size_for_thread);
-
-                        for (int i = 0; i < ga_population_size_for_thread; ++i) {
-                            if (current_ga_pop_thread.empty()) break;
-                            int p1_local_idx = select_parent_tournament(current_ga_pop_thread, TOURNAMENT_K_VALUE, thread_rng);
-                            int p2_local_idx = select_parent_tournament(current_ga_pop_thread, TOURNAMENT_K_VALUE, thread_rng);
-
-                            if (p1_local_idx == -1 || p2_local_idx == -1) continue;
-
-                            const auto& parent1_sol = current_ga_pop_thread[p1_local_idx];
-                            const auto& parent2_sol = current_ga_pop_thread[p2_local_idx];
-                            
-                            auto child_permutation = order_crossover(parent1_sol.customer_permutation, parent2_sol.customer_permutation, thread_rng);
-                            mutate(child_permutation, thread_rng, 0.2); // Hardcoded mutation rate
-                            
-                            auto child_customer2node = parent1_sol.customer2node; // Inherit map
-                            Solution child_solution = Solver::evaluate(instance, child_permutation, child_customer2node, false, verbose);
-                            offspring_population.push_back(child_solution);
-                        }
-                        // Generational replacement with elitism: combine parents and offspring, sort, then truncate
-                        current_ga_pop_thread.insert(current_ga_pop_thread.end(), offspring_population.begin(), offspring_population.end());
-                        std::sort(current_ga_pop_thread.begin(), current_ga_pop_thread.end(), 
-                                  [](const Solution& a, const Solution& b) {
-                                      return a.objective_value < b.objective_value;
-                                  });
-                        if (current_ga_pop_thread.size() > ga_population_size_for_thread) {
-                            current_ga_pop_thread.resize(ga_population_size_for_thread);
-                        }
-                    }
-                    solutions_from_thread_ga = current_ga_pop_thread; // Final population after GA
-                } else {
-                    solutions_from_thread_ga.clear(); // No initial GA population
-                }
+            // 1. Ant construction and Local Search for this thread's ants
+            for (int k_local = 0; k_local < num_ants_this_thread; ++k_local) {
+                auto [perm, customer2node_map] = paco_construct_solution(instance, tau, params.alpha, params.beta, thread_rng);
                 
-                // 4. Determine this thread's contribution to the global solution pool
-                std::vector<Solution> thread_contribution_to_global = solutions_from_thread_ga;
-                // Fallback: if GA produced nothing, contribute best initial ants
-                if (thread_contribution_to_global.empty() && !thread_initial_ant_solutions.empty()) {
-                    std::sort(thread_initial_ant_solutions.begin(), thread_initial_ant_solutions.end(),
-                              [](const Solution& a, const Solution& b) { return a.objective_value < b.objective_value; });
-                    int num_to_contribute_fallback = std::min((int)thread_initial_ant_solutions.size(), std::max(1, ga_population_size_for_thread));
-                    if (num_to_contribute_fallback > 0 && num_to_contribute_fallback <= thread_initial_ant_solutions.size()) {
-                         thread_contribution_to_global.assign(thread_initial_ant_solutions.begin(), 
-                                                              thread_initial_ant_solutions.begin() + num_to_contribute_fallback);
+                std::vector<int> best_perm_ls = perm;
+                Solution initial_eval_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false, verbose);
+                double best_obj_ls = initial_eval_sol.objective_value;
+                
+                std::vector<int> curr_perm_ls = best_perm_ls;
+                double curr_obj_ls = best_obj_ls;
+                
+                for (int ls_iter_count = 0; ls_iter_count < params.LS; ++ls_iter_count) {
+                    std::vector<int> neighbor_perm = curr_perm_ls;
+                    int n_ls = neighbor_perm.size();
+                    if (n_ls > 1) {
+                        std::uniform_real_distribution<> op_dist(0.0, 1.0);
+                        double r_ls = op_dist(thread_rng);
+                        std::uniform_int_distribution<> idx_dist(0, n_ls - 1);
+                        int i_ls = idx_dist(thread_rng);
+                        int j_ls = idx_dist(thread_rng);
+
+                        if (r_ls < 1.0/3.0) { // Swap
+                            if (i_ls != j_ls) std::swap(neighbor_perm[i_ls], neighbor_perm[j_ls]);
+                        } else if (r_ls < 2.0/3.0) { // Insert
+                            if (i_ls != j_ls && !neighbor_perm.empty()) {
+                                int val_to_move = neighbor_perm[i_ls];
+                                neighbor_perm.erase(neighbor_perm.begin() + i_ls);
+                                // Adjust j_ls to be a valid index for insertion
+                                int insert_at_idx = j_ls;
+                                if (neighbor_perm.empty()) {
+                                    insert_at_idx = 0;
+                                } else if (insert_at_idx > neighbor_perm.size()) {
+                                    insert_at_idx = neighbor_perm.size(); 
+                                }
+
+                                if (insert_at_idx == 0 || neighbor_perm.empty()) {
+                                    neighbor_perm.insert(neighbor_perm.begin(), val_to_move);
+                                } else if (insert_at_idx >= neighbor_perm.size()) {
+                                    neighbor_perm.push_back(val_to_move);
+                                }
+                                else {
+                                    neighbor_perm.insert(neighbor_perm.begin() + insert_at_idx, val_to_move);
+                                }
+                            }
+                        } else { // Reverse (2-opt style)
+                            if (i_ls > j_ls) std::swap(i_ls, j_ls);
+                            if (i_ls != j_ls && i_ls < neighbor_perm.size() && j_ls < neighbor_perm.size() && (j_ls + 1) <= neighbor_perm.size()) {
+                                std::reverse(neighbor_perm.begin() + i_ls, neighbor_perm.begin() + j_ls + 1);
+                            }
+                        }
+                        Solution neighbor_sol_eval = Solver::evaluate(instance, neighbor_perm, customer2node_map, false, verbose);
+                        double neighbor_obj_ls = neighbor_sol_eval.objective_value;
+                        if (neighbor_obj_ls < curr_obj_ls) {
+                            curr_perm_ls = neighbor_perm;
+                            curr_obj_ls = neighbor_obj_ls;
+                            if (curr_obj_ls < best_obj_ls) {
+                                best_perm_ls = curr_perm_ls;
+                                best_obj_ls = curr_obj_ls;
+                            }
+                        }
                     }
                 }
+                Solution final_ant_sol = Solver::evaluate(instance, best_perm_ls, customer2node_map, false, verbose);
+                thread_initial_ant_solutions[k_local] = final_ant_sol;
+                thread_initial_ant_objs[k_local] = final_ant_sol.objective_value;
+            }
 
-                // 5. Add this thread's final solutions to the global pool for this iteration
-                #pragma omp critical
-                {
-                    iteration_final_solutions.insert(iteration_final_solutions.end(),
-                                                     thread_contribution_to_global.begin(), 
-                                                     thread_contribution_to_global.end());
+            // 2. Initialize GA population for this thread from its best ants
+            int ga_population_size_for_thread = std::max(1, t / p); 
+            if (t < p && t > 0) ga_population_size_for_thread = 1; 
+            if (t == 0) ga_population_size_for_thread = 0; 
+            ga_population_size_for_thread = std::min(ga_population_size_for_thread, num_ants_this_thread);
+
+            std::vector<Solution> current_ga_pop_thread; // This thread's GA population
+            if (num_ants_this_thread > 0 && ga_population_size_for_thread > 0) {
+                std::vector<int> ant_indices(num_ants_this_thread);
+                std::iota(ant_indices.begin(), ant_indices.end(), 0);
+                std::partial_sort(ant_indices.begin(), ant_indices.begin() + ga_population_size_for_thread, ant_indices.end(),
+                                    [&](int a, int b){ return thread_initial_ant_objs[a] < thread_initial_ant_objs[b]; });
+                for (int i = 0; i < ga_population_size_for_thread; ++i) {
+                    current_ga_pop_thread.push_back(thread_initial_ant_solutions[ant_indices[i]]);
                 }
-            } // if (num_ants_this_thread > 0)
+            }
+
+            // 3. Iterative GA with Tournament Selection for this thread
+            std::vector<Solution> solutions_from_thread_ga; // Final output of this thread's GA
+
+            if (!current_ga_pop_thread.empty()) {
+                const int TOURNAMENT_K_VALUE = 2; // Tournament size
+
+                // Lambda for tournament selection
+                auto select_parent_tournament = 
+                    [&](const std::vector<Solution>& pop, int k_tournament, std::mt19937& rng) -> int {
+                    if (pop.empty()) return -1;
+                    if (pop.size() == 1) return 0;
+                    int effective_k = std::min(k_tournament, (int)pop.size());
+                    if (effective_k <= 0) return 0; 
+
+                    int best_idx_in_tournament = -1;
+                    double best_obj_in_tournament = std::numeric_limits<double>::max();
+                    std::uniform_int_distribution<> dist(0, pop.size() - 1);
+
+                    for (int i = 0; i < effective_k; ++i) {
+                        int current_participant_idx = dist(rng);
+                        if (pop[current_participant_idx].objective_value < best_obj_in_tournament) {
+                            best_obj_in_tournament = pop[current_participant_idx].objective_value;
+                            best_idx_in_tournament = current_participant_idx;
+                        }
+                    }
+                    return (best_idx_in_tournament != -1) ? best_idx_in_tournament : dist(rng); // Fallback
+                };
+
+                // Determine GA generations for this thread
+                int num_ga_generations = std::min(non_improved + 1, 8); // Extra generations for exploration
+
+                for (int gen = 0; gen < num_ga_generations; ++gen) {
+                    if (current_ga_pop_thread.empty() || ga_population_size_for_thread == 0) break;
+
+                    std::vector<Solution> offspring_population;
+                    offspring_population.reserve(ga_population_size_for_thread);
+
+                    for (int i = 0; i < ga_population_size_for_thread; ++i) {
+                        if (current_ga_pop_thread.empty()) break;
+                        int p1_local_idx = select_parent_tournament(current_ga_pop_thread, TOURNAMENT_K_VALUE, thread_rng);
+                        int p2_local_idx = select_parent_tournament(current_ga_pop_thread, TOURNAMENT_K_VALUE, thread_rng);
+
+                        if (p1_local_idx == -1 || p2_local_idx == -1) continue;
+
+                        const auto& parent1_sol = current_ga_pop_thread[p1_local_idx];
+                        const auto& parent2_sol = current_ga_pop_thread[p2_local_idx];
+                        
+                        auto child_permutation = order_crossover(parent1_sol.customer_permutation, parent2_sol.customer_permutation, thread_rng);
+                        mutate(child_permutation, thread_rng, 0.2); // Hardcoded mutation rate
+                        
+                        auto child_customer2node = parent1_sol.customer2node; // Inherit map
+                        Solution child_solution = Solver::evaluate(instance, child_permutation, child_customer2node, false, verbose);
+                        offspring_population.push_back(child_solution);
+                    }
+                    // Generational replacement with elitism: combine parents and offspring, sort, then truncate
+                    current_ga_pop_thread.insert(current_ga_pop_thread.end(), offspring_population.begin(), offspring_population.end());
+                    std::sort(current_ga_pop_thread.begin(), current_ga_pop_thread.end(), 
+                                [](const Solution& a, const Solution& b) {
+                                    return a.objective_value < b.objective_value;
+                                });
+                    if (current_ga_pop_thread.size() > ga_population_size_for_thread) {
+                        current_ga_pop_thread.resize(ga_population_size_for_thread);
+                    }
+                }
+                solutions_from_thread_ga = current_ga_pop_thread; // Final population after GA
+            } else {
+                solutions_from_thread_ga.clear(); // No initial GA population
+            }
+            
+            // 4. Determine this thread's contribution to the global solution pool
+            std::vector<Solution> thread_contribution_to_global = solutions_from_thread_ga;
+            // Fallback: if GA produced nothing, contribute best initial ants
+            if (thread_contribution_to_global.empty() && !thread_initial_ant_solutions.empty()) {
+                std::sort(thread_initial_ant_solutions.begin(), thread_initial_ant_solutions.end(),
+                            [](const Solution& a, const Solution& b) { return a.objective_value < b.objective_value; });
+                int num_to_contribute_fallback = std::min((int)thread_initial_ant_solutions.size(), std::max(1, ga_population_size_for_thread));
+                if (num_to_contribute_fallback > 0 && num_to_contribute_fallback <= thread_initial_ant_solutions.size()) {
+                        thread_contribution_to_global.assign(thread_initial_ant_solutions.begin(), 
+                                                            thread_initial_ant_solutions.begin() + num_to_contribute_fallback);
+                }
+            }
+
+            // 5. Add this thread's final solutions to the global pool for this iteration
+            #pragma omp critical
+            {
+                iteration_final_solutions.insert(iteration_final_solutions.end(),
+                                                    thread_contribution_to_global.begin(), 
+                                                    thread_contribution_to_global.end());
+            }
         } // End of #pragma omp parallel
         if (verbose >= 2) std::cout << "[PACO] Finished parallel ant construction and GA." << std::endl;
 
