@@ -1,8 +1,8 @@
 small:
   data_dir: ../data/25
   params:
-    m: 20
-    I: 12 # Number of iterations
+    m: 15
+    I: 10 # Number of iterations
     p: 64
     LS: 50 # Number of local search iterations
     t: 10
@@ -16,8 +16,8 @@ small:
 medium:
   data_dir: ../data/50
   params:
-    I: 15 # Number of iterations
     m: 30
+    I: 15 # Number of iterations
     Q: 1.0
     t: 50
     LS: 100 # Number of local search iterations
@@ -36,7 +36,7 @@ large:
     Q: 2
     LS: 100 # Number of local search iterations
     alpha: 1.25
-    beta: 1.25
+    beta: 1.0
     p: 64
     rho: 0.5
     t: 100

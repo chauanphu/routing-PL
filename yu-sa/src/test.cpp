@@ -292,18 +292,18 @@ int main(int argc, char* argv[]) {
     auto end = std::chrono::high_resolution_clock::now();
     double runtime = std::chrono::duration<double>(end - start).count();
     std::cout << "  Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
-    // Print routes and customer permutation
-    std::cout << "Customer permutation: ";
-    for (size_t i = 0; i < sol.customer_permutation.size(); ++i) {
-        std::cout << sol.customer_permutation[i];
-        if (i + 1 < sol.customer_permutation.size()) std::cout << ", ";
-    }
-    // Print distances for debugging
-    std::cout << "\nRoute distances:" << std::endl;
-    for (size_t i = 0; i < sol.routes.size(); ++i) {
-        std::cout << "Route " << i+1 << ":" << std::endl;
-        print_route_distances(instance, sol.routes[i]);
-    }
+    // // Print routes and customer permutation
+    // std::cout << "Customer permutation: ";
+    // for (size_t i = 0; i < sol.customer_permutation.size(); ++i) {
+    //     std::cout << sol.customer_permutation[i];
+    //     if (i + 1 < sol.customer_permutation.size()) std::cout << ", ";
+    // }
+    // // Print distances for debugging
+    // std::cout << "\nRoute distances:" << std::endl;
+    // for (size_t i = 0; i < sol.routes.size(); ++i) {
+    //     std::cout << "Route " << i+1 << ":" << std::endl;
+    //     print_route_distances(instance, sol.routes[i]);
+    // }
     std::cout << std::endl;
     return 0;
 }
