@@ -19,16 +19,9 @@ add_executable(test
     ${SOLVER_SRC}
 )
 
-add_executable(bao
-    src/bao.cpp
-    ${CORE_SRC}
-    ${SOLVER_SRC}
-)
-
 find_package(yaml-cpp REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
 target_link_libraries(main yaml-cpp OpenMP::OpenMP_CXX)
 target_link_libraries(test yaml-cpp OpenMP::OpenMP_CXX)
-target_link_libraries(bao yaml-cpp OpenMP::OpenMP_CXX nlohmann_json::nlohmann_json)
