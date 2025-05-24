@@ -1,9 +1,4 @@
 parameters:
-  # m:
-  #   type: int
-  #   range: [1024, 4096]
-  #   default: 3072
-  #   step: 1024
   m:
     type: int
     range: [10, 20, 30, 40]

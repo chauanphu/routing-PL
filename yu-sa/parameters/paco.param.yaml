@@ -18,8 +18,8 @@ medium:
   params:
     m: 30
     I: 15 # Number of iterations
-    Q: 2.0
-    t: 50
+    Q: 2.5
+    t: 100
     LS: 100 # Number of local search iterations
     alpha: 1.25
     beta: 1.0
@@ -31,9 +31,9 @@ medium:
 large:
   data_dir: ../data/100
   params:
-    m: 40
-    I: 10 # Number of iterations
-    Q: 2
+    m: 50
+    I: 15 # Number of iterations
+    Q: 2.0
     LS: 100 # Number of local search iterations
     alpha: 1.25
     beta: 1.0

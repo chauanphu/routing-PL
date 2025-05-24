@@ -1,31 +1,31 @@
 parameters:
   m:
     type: int
-    # range: [10, 30, 50, 70]
-    default: 50
+    range: [5, 10, 20, 30]
+    default: 10
   I:
     type: int
-    # range: [5, 10, 15, 20]
+    range: [5, 10, 15, 20]
     default: 10
   LS:
     type: int
-    # range: [10, 50, 100, 150]
-    default: 100
+    range: [10, 50, 100, 150]
+    default: 50
   alpha:
     type: float
-    # range: [0.5, 0.75, 1.0, 1.25, 1.5]
+    range: [0.5, 0.75, 1.0, 1.25, 1.5]
     default: 1.0
   beta:
     type: float
-    # range: [0.5, 0.75, 1.0, 1.25]
+    range: [0.5, 0.75, 1.0, 1.25]
     default: 0.75
   rho:
     type: float
-    # range: [0.4, 0.5, 0.6, 0.7]
+    range: [0.4, 0.5, 0.6, 0.7]
     default: 0.5
   Q:
     type: float
-    range: [0.5, 1.0, 1.5, 2.0, 2.5]
+    range: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
     default: 2.0
   t:
     type: int
