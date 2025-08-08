@@ -122,6 +122,18 @@ static void mutate(std::vector<int>& perm, std::mt19937& gen, double mutation_ra
     }
 }
 
+// Helper: Compute Hamming distance between two permutations
+static int hamming_distance(const std::vector<int>& a, const std::vector<int>& b) {
+    int n = std::min(a.size(), b.size());
+    int dist = 0;
+    for (int i = 0; i < n; ++i) {
+        if (a[i] != b[i]) ++dist;
+    }
+    // If sizes differ, count extra elements as differences
+    dist += std::abs((int)a.size() - (int)b.size());
+    return dist;
+}
+
 Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool history, int verbose) {
     if (verbose >= 1) std::cout << "[PACO] Starting solve..." << std::endl;
     int n_nodes = instance.num_customers + 1; // including depot, for pheromone matrix indexing
@@ -261,22 +273,34 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                   [](const Solution& a, const Solution& b) {
             return a.objective_value < b.objective_value;
         });
-        if (verbose >= 2 && !iteration_final_solutions.empty()) {
-            std::cout << "[PACO] Total solutions after parallel GA: " << iteration_final_solutions.size() 
-                      << ", Best obj this iter: " << iteration_final_solutions[0].objective_value << std::endl;
-        } else if (verbose >=2 && iteration_final_solutions.empty()) {
-            std::cout << "[PACO] No solutions generated this iteration." << std::endl;
+        // --- Compute and print average Hamming distance among top-t elitist ants ---
+        int num_solutions_for_pheromone_update = std::min((int)iteration_final_solutions.size(), t);
+        double avg_hamming = 0.0;
+        int count_pairs = 0;
+        if (num_solutions_for_pheromone_update > 1) {
+            for (int i = 0; i < num_solutions_for_pheromone_update; ++i) {
+                for (int j = i + 1; j < num_solutions_for_pheromone_update; ++j) {
+                    avg_hamming += hamming_distance(
+                        iteration_final_solutions[i].customer_permutation,
+                        iteration_final_solutions[j].customer_permutation);
+                    ++count_pairs;
+                }
+            }
+            avg_hamming /= count_pairs;
+        }
+        if (verbose == 1 && num_solutions_for_pheromone_update > 1) {
+            std::cout << "[PACO] Iter " << iter << ": Avg Hamming distance (top-" << t << ") = " << avg_hamming << std::endl;
         }
 
         // Pheromone evaporation
         for (int i = 0; i < n_nodes; ++i)
             for (int j = 0; j < n_nodes; ++j)
-                for (int o = 0; o < 2; ++o)
+                for (int o = 0; o < 2; ++o) {
                     tau[i][j][o] *= (1.0 - rho);
-        if (verbose >= 2) std::cout << "[PACO] Pheromone evaporation done. Rho = " << rho << std::endl;
+                }
 
         // Pheromone update using the top 't' solutions from iteration_final_solutions
-        int num_solutions_for_pheromone_update = std::min((int)iteration_final_solutions.size(), t);
+        num_solutions_for_pheromone_update = std::min((int)iteration_final_solutions.size(), t);
         for (int rank = 0; rank < num_solutions_for_pheromone_update; ++rank) {
             const auto& sol_for_update = iteration_final_solutions[rank];
             const auto& perm = sol_for_update.customer_permutation; // Assumed to be customer IDs
@@ -314,6 +338,29 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
             }
         }
 
+                // Clamp tau within 3 std from the mean
+        // double tau_sum = 0.0, tau_sq_sum = 0.0;
+        // int tau_count = 0;
+        // for (int i = 0; i < n_nodes; ++i)
+        //     for (int j = 0; j < n_nodes; ++j)
+        //         for (int o = 0; o < 2; ++o)
+        //             if (tau[i][j][o] > 0.0) { // Only count feasible
+        //                 tau_sum += tau[i][j][o];
+        //                 tau_sq_sum += tau[i][j][o] * tau[i][j][o];
+        //                 ++tau_count;
+        //             }
+        // double tau_mean = (tau_count > 0) ? (tau_sum / tau_count) : 0.0;
+        // double tau_min = tau_mean * 0.1; // Minimum pheromone level
+        // double tau_max = tau_mean * 3.0; // Maximum pheromone level
+
+        // for (int i = 0; i < n_nodes; ++i)
+        //     for (int j = 0; j < n_nodes; ++j)
+        //         for (int o = 0; o < 2; ++o) {
+        //             tau[i][j][o] *= (1.0 - rho);
+        //             if (tau[i][j][o] < tau_min) tau[i][j][o] = tau_min; // Clamp to min
+        //             if (tau[i][j][o] > tau_max) tau[i][j][o] = tau_max; // Clamp to max
+        //         }
+
         // Update global best solution
         if (!iteration_final_solutions.empty()) {
             if (iteration_final_solutions[0].objective_value < global_best_obj) {
@@ -321,14 +368,14 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                 global_best_obj = iteration_final_solutions[0].objective_value;
                 non_improved = 0;
                 if (verbose >= 1) std::cout << "[PACO] New global best: " << global_best_obj << std::endl;
-                rho = rho_ini;
+                // rho = rho_ini;
             } else {
                 non_improved++;
-                rho = rho_ini + (0.2 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
+                rho = rho_ini + (0.7 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
             }
         } else {
              non_improved++; // No solutions, count as non-improvement
-             rho = rho_ini + (0.2 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
+             rho = rho_ini + (0.7 - rho_ini) * sigmoid(10 * (static_cast<double>(non_improved) / I - 0.5)); // Avoid division by zero if I=0
         }
 
         if (history) convergence_history.push_back(global_best_obj);

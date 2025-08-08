@@ -17,14 +17,14 @@ medium:
   data_dir: ../data/50
   params:
     m: 30
-    I: 15 # Number of iterations
+    I: 10 # Number of iterations
     Q: 2.5
-    t: 100
+    t: 40
     LS: 100 # Number of local search iterations
     alpha: 1.25
     beta: 1.0
     p: 64
-    rho: 0.6
+    rho: 0.4
   num_runs: 10
   output_csv: ../output/solutions/medium_paco.csv
 
@@ -32,13 +32,13 @@ large:
   data_dir: ../data/100
   params:
     m: 50
-    I: 15 # Number of iterations
+    I: 10 # Number of iterations
     Q: 2.0
     LS: 100 # Number of local search iterations
     alpha: 1.25
     beta: 1.0
     p: 64
-    rho: 0.6
+    rho: 0.5
     t: 40
   num_runs: 10
   output_csv: ../output/solutions/large_paco.csv
