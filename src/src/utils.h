@@ -16,6 +16,10 @@ void initialize_customer2node(const VRPInstance& instance, std::unordered_map<in
 // Construct a random customer permutation with depot delimiters (0) separating routes.
 std::vector<int> random_delim_permutation(int n, int m, std::mt19937& gen);
 
+void initialize_solution(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int, int>& customer2node, double p = 0.5, bool delimiters = false);
+
+// Random initialization with delimiters aware of capacity, time windows, and locker duplication.
+void random_init(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int,int>& customer2node, double p);
 } // namespace utils
 
 #endif // UTILS_H

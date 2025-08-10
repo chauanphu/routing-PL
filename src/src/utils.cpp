@@ -1,4 +1,5 @@
 #include "utils.h"
+#include <unordered_set>
 
 namespace utils {
 
@@ -72,4 +73,240 @@ std::vector<int> random_delim_permutation(int n, int m, std::mt19937& gen) {
     return result;
 }
 
+void initialize_solution(
+    const VRPInstance& instance,
+    std::vector<int>& customer_perm,
+    std::unordered_map<int, int>& customer2node,
+    double p,
+    bool delimiters) {
+    int n = instance.num_customers;
+    customer_perm.clear();
+    customer2node.clear();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> prob(0.0, 1.0);
+    // Step 1: assign delivery nodes for each customer as before
+    std::vector<int> assigned_delivery_node(n, -1);
+    for (int i = 0; i < n; ++i) {
+        auto c = instance.customers[i];
+        if (c->customer_type == 1) {
+            assigned_delivery_node[i] = c->id;
+        } else if (c->customer_type == 2) {
+            int assigned = -1;
+            if (!instance.customer_preferences.empty() && i < instance.customer_preferences.size()) {
+                for (size_t j = 0; j < instance.customer_preferences[i].size(); ++j) {
+                    if (instance.customer_preferences[i][j] == 1) {
+                        assigned = instance.lockers[j]->id;
+                        break;
+                    }
+                }
+            }
+            if (assigned != -1) {
+                assigned_delivery_node[i] = assigned;
+            } else if (!instance.lockers.empty()) {
+                assigned_delivery_node[i] = instance.lockers[0]->id;
+            } else {
+                assigned_delivery_node[i] = c->id; // fallback
+            }
+        } else if (c->customer_type == 3) {
+            double r = prob(gen);
+            int assigned = -1;
+            if (r >= p) {
+                if (!instance.customer_preferences.empty() && i < instance.customer_preferences.size()) {
+                    for (size_t j = 0; j < instance.customer_preferences[i].size(); ++j) {
+                        if (instance.customer_preferences[i][j] == 1) {
+                            assigned = instance.lockers[j]->id;
+                            break;
+                        }
+                    }
+                }
+                if (assigned != -1) {
+                    assigned_delivery_node[i] = assigned;
+                } else if (!instance.lockers.empty()) {
+                    assigned_delivery_node[i] = instance.lockers[0]->id;
+                } else {
+                    assigned_delivery_node[i] = c->id; // fallback
+                }
+            } else {
+                assigned_delivery_node[i] = c->id;
+            }
+        }
+        customer2node[c->id] = assigned_delivery_node[i];
+    }
+    // Step 2: nearest neighbor assignment for permutation; optionally insert delimiters
+    std::vector<bool> assigned(n, false);
+    if (delimiters) {
+        int current_node = 0; // depot
+        int m = instance.num_vehicles > 0 ? instance.num_vehicles : 1;
+        int per_route = (n + m - 1) / m;
+        int assigned_count = 0;
+        for (int v = 0; v < m; ++v) {
+            customer_perm.push_back(0); // depot delimiter at start of each route
+            int route_count = 0;
+            // Nearest neighbor insertion
+            while (route_count < per_route && assigned_count < n) {
+                double min_dist = std::numeric_limits<double>::max();
+                int next_customer = -1;
+                for (int i = 0; i < n; ++i) {
+                    if (assigned[i]) continue;
+                    int delivery_node = assigned_delivery_node[i];
+                    double dist = instance.distance_matrix[current_node][delivery_node];
+                    if (dist < min_dist) {
+                        min_dist = dist;
+                        next_customer = i;
+                    }
+                }
+                if (next_customer == -1) break;
+                assigned[next_customer] = true;
+                customer_perm.push_back(next_customer + 1); // customer IDs are 1-based
+                current_node = assigned_delivery_node[next_customer];
+                ++route_count;
+                ++assigned_count;
+            }
+            // Nearest neighbor insertion
+            current_node = 0; // reset to depot for next route
+        }
+        customer_perm.push_back(0); // depot delimiter at end
+    } else {
+        int current_node = 0; // depot
+        for (int step = 0; step < n; ++step) {
+            double min_dist = std::numeric_limits<double>::max();
+            int next_customer = -1;
+            for (int i = 0; i < n; ++i) {
+                if (assigned[i]) continue;
+                int delivery_node = assigned_delivery_node[i];
+                double dist = instance.distance_matrix[current_node][delivery_node];
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    next_customer = i;
+                }
+            }
+            if (next_customer == -1) break;
+            assigned[next_customer] = true;
+            customer_perm.push_back(next_customer + 1); // customer IDs are 1-based
+            current_node = assigned_delivery_node[next_customer];
+        }
+    }
+}
+
+// Random initialization with constraint-aware delimiter insertion.
+void random_init(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int,int>& customer2node, double p) {
+    int n = instance.num_customers;
+    int m = instance.num_vehicles > 0 ? instance.num_vehicles : 1;
+    customer_perm.clear();
+    customer2node.clear();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> prob(0.0, 1.0);
+    // Step 1: randomly assign delivery nodes similar to initialize_solution but random locker choice when allowed
+    std::vector<int> assigned_delivery_node(n, -1);
+    for (int i = 0; i < n; ++i) {
+        auto c = instance.customers[i];
+        if (c->customer_type == 1) {
+            assigned_delivery_node[i] = c->id;
+        } else if (c->customer_type == 2) {
+            // pick a preferred locker randomly among feasible, else first locker, else itself
+            std::vector<int> prefs;
+            if (!instance.customer_preferences.empty() && i < (int)instance.customer_preferences.size()) {
+                for (size_t j = 0; j < instance.customer_preferences[i].size(); ++j) {
+                    if (instance.customer_preferences[i][j] == 1) prefs.push_back(instance.lockers[j]->id);
+                }
+            }
+            if (!prefs.empty()) {
+                std::uniform_int_distribution<> pick(0, (int)prefs.size()-1);
+                assigned_delivery_node[i] = prefs[pick(gen)];
+            } else if (!instance.lockers.empty()) {
+                std::uniform_int_distribution<> pick(0, (int)instance.lockers.size()-1);
+                assigned_delivery_node[i] = instance.lockers[pick(gen)]->id;
+            } else {
+                assigned_delivery_node[i] = c->id;
+            }
+        } else if (c->customer_type == 3) {
+            double r = prob(gen);
+            if (r < p) {
+                assigned_delivery_node[i] = c->id; // home
+            } else {
+                std::vector<int> prefs;
+                if (!instance.customer_preferences.empty() && i < (int)instance.customer_preferences.size()) {
+                    for (size_t j = 0; j < instance.customer_preferences[i].size(); ++j) {
+                        if (instance.customer_preferences[i][j] == 1) prefs.push_back(instance.lockers[j]->id);
+                    }
+                }
+                if (!prefs.empty()) {
+                    std::uniform_int_distribution<> pick(0, (int)prefs.size()-1);
+                    assigned_delivery_node[i] = prefs[pick(gen)];
+                } else if (!instance.lockers.empty()) {
+                    std::uniform_int_distribution<> pick(0, (int)instance.lockers.size()-1);
+                    assigned_delivery_node[i] = instance.lockers[pick(gen)]->id;
+                } else {
+                    assigned_delivery_node[i] = c->id;
+                }
+            }
+        }
+        customer2node[c->id] = assigned_delivery_node[i];
+    }
+    // Step 2: random permutation of customers then build with constraints adding delimiters
+    std::vector<int> customers(n);
+    for (int i = 0; i < n; ++i) customers[i] = i + 1;
+    std::shuffle(customers.begin(), customers.end(), gen);
+    const int depot_id = 0;
+    int cap = instance.vehicle_capacity;
+    int vehicle = 0;
+    int load = 0;
+    int time = 0;
+    int curr_node = depot_id;
+    std::unordered_set<int> visited_lockers;
+    int last_node = depot_id;
+    customer_perm.push_back(0); // start first route
+    for (int cust_pos = 0; cust_pos < n; ++cust_pos) {
+        int cust_id = customers[cust_pos];
+        int delivery_node = customer2node[cust_id];
+        int demand = 0; int early = 0; int late = std::numeric_limits<int>::max();
+        bool is_locker = (delivery_node > instance.num_customers);
+        if (delivery_node <= instance.num_customers) {
+            auto c = instance.customers[delivery_node-1];
+            demand = c->demand;
+            early = c->early_time;
+            late = c->late_time;
+        } else {
+            auto l = instance.lockers[delivery_node-1-instance.num_customers];
+            auto c = instance.customers[cust_id-1];
+            demand = c->demand;
+            early = l->early_time;
+            late = l->late_time;
+        }
+        int arr_time = time + (int)instance.distance_matrix[curr_node][delivery_node];
+        bool duplicate_locker = false;
+        if (is_locker) {
+            if (visited_lockers.count(delivery_node) && delivery_node != last_node) duplicate_locker = true;
+        }
+        bool violates = (load + demand > cap) || (arr_time > late) || duplicate_locker;
+        if (violates) {
+            // close route (return to depot) if last inserted wasn't depot
+            if (customer_perm.back() != 0) customer_perm.push_back(0);
+            // start new route
+            vehicle++;
+            if (vehicle >= m) {
+                // no more vehicles: break remaining customers (leave unserved)
+                break;
+            }
+            load = 0;
+            time = 0;
+            curr_node = depot_id;
+            visited_lockers.clear();
+            last_node = depot_id;
+            // retry this customer in new route
+            cust_pos--;
+            continue;
+        }
+        // accept insertion
+        customer_perm.push_back(cust_id);
+        load += demand;
+        time = std::max(arr_time, early);
+        curr_node = delivery_node;
+        if (is_locker) visited_lockers.insert(delivery_node);
+        last_node = delivery_node;
+    }
+    if (customer_perm.back() != 0) customer_perm.push_back(0); // end last route
+}
 } // namespace utils
