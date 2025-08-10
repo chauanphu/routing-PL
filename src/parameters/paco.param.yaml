@@ -4,7 +4,7 @@ small:
     m: 15
     I: 10 # Number of iterations
     p: 64
-    LS: 50 # Number of local search iterations
+    LS: 30 # Number of local search iterations
     t: 10
     Q: 2.0
     alpha: 1.25
@@ -18,13 +18,13 @@ medium:
   params:
     m: 30
     I: 10 # Number of iterations
-    Q: 2.5
+    Q: 2.0
     t: 40
-    LS: 100 # Number of local search iterations
+    LS: 40 # Number of local search iterations
     alpha: 1.25
     beta: 1.0
     p: 64
-    rho: 0.4
+    rho: 0.5
   num_runs: 10
   output_csv: ../output/solutions/medium_paco.csv
 
