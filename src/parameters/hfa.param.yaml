@@ -2,7 +2,7 @@ small:
   data_dir: ../data/25
   params:
     i_max: 50
-    pop_size: 10
+    pop_size: 200
     c_rate: 0.95
     m_rate: 0.1
     beta: 1.0
