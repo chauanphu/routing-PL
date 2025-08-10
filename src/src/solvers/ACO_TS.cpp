@@ -1,10 +1,28 @@
 #include "ACO_TS.h"
+#include "../core/SolverFactory.h"
 #include <algorithm>
 #include <limits>
 #include <cmath>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <numeric>
+#include <random>
+
+namespace {
+    SolverRegistrar<ACO_TS> registrar("aco-ts");
+}
+
+struct ACOTSParams {
+    int num_ants = 50;
+    int num_iterations = 1000;
+    double alpha = 1.0;
+    double beta = 2.0;
+    double rho = 0.1; // evaporation
+    double Q = 1.0;
+    int stagnation_limit = 10;
+    double p = 0.5; // for type-III assignment
+};
 
 // Helper: initialize delivery node mapping for each customer
 static void initialize_customer2node(const VRPInstance& instance, std::unordered_map<int, int>& customer2node, double p, std::mt19937& gen) {
@@ -311,7 +329,16 @@ static Solution tabu_search(const VRPInstance& instance, const std::vector<int>&
     return best;
 }
 
-Solution ACO_TS::solve(const VRPInstance& instance, const ACOTSParams& params, bool history) {
+Solution ACO_TS::solve(const VRPInstance& instance, const YAML::Node& params_node, bool history, int verbose) {
+    ACOTSParams params;
+    params.num_ants = params_node["num_ants"].as<int>();
+    params.num_iterations = params_node["num_iterations"].as<int>();
+    params.alpha = params_node["alpha"].as<double>();
+    params.beta = params_node["beta"].as<double>();
+    params.rho = params_node["evaporation_rate"].as<double>();
+    params.Q = params_node["Q"].as<double>();
+    params.p = params_node["p"].as<double>();
+
     int n = instance.num_customers;
     int m = instance.num_vehicles;
     int num_nodes = n + instance.num_lockers + 1;

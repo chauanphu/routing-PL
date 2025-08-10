@@ -1,4 +1,5 @@
 #include "PACO.h"
+#include "../core/SolverFactory.h"
 #include <omp.h>
 #include <algorithm>
 #include <limits>
@@ -11,19 +12,21 @@
 #include <cmath>
 #include <set>
 
-PACOParams PACO::load_params(const std::string& filename) {
-    PACOParams params;
-    YAML::Node config = YAML::LoadFile(filename);
-    params.m = config["m"].as<int>();
-    params.alpha = config["alpha"].as<double>();
-    params.beta = config["beta"].as<double>();
-    params.rho = config["rho"].as<double>();
-    params.Q = config["Q"].as<double>();
-    params.I = config["I"].as<int>();
-    params.t = config["t"].as<int>();
-    params.p = config["p"].as<int>();
-    return params;
+namespace {
+    SolverRegistrar<PACO> registrar("paco");
 }
+
+struct PACOParams {
+    int m;      // Number of ants
+    double alpha;
+    double beta;
+    double rho;
+    double Q;
+    int I;     // Number of iterations
+    int t;     // Top ants for elitist update
+    int p = 32;     // Number of processors (threads)
+    int LS = 10;    // Local search strategy (0: none, 1: 2-opt, 2: 3-opt)
+};
 
 // Helper: PACO ant solution construction using 3D-ACO transition rule
 static std::pair<std::vector<int>, std::unordered_map<int, int>>
@@ -134,7 +137,17 @@ static int hamming_distance(const std::vector<int>& a, const std::vector<int>& b
     return dist;
 }
 
-Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool history, int verbose) {
+Solution PACO::solve(const VRPInstance& instance, const YAML::Node& params_node, bool history, int verbose) {
+    PACOParams params;
+    params.m = params_node["m"].as<int>();
+    params.I = params_node["I"].as<int>();
+    params.alpha = params_node["alpha"].as<double>();
+    params.beta = params_node["beta"].as<double>();
+    params.rho = params_node["rho"].as<double>();
+    params.Q = params_node["Q"].as<double>();
+    params.t = params_node["t"].as<int>();
+    params.p = params_node["p"].as<int>();
+
     if (verbose >= 1) std::cout << "[PACO] Starting solve..." << std::endl;
     int n_nodes = instance.num_customers + 1; // including depot, for pheromone matrix indexing
     int m = params.m; // total number of ants
@@ -275,22 +288,6 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
         });
         // --- Compute and print average Hamming distance among top-t elitist ants ---
         int num_solutions_for_pheromone_update = std::min((int)iteration_final_solutions.size(), t);
-        double avg_hamming = 0.0;
-        int count_pairs = 0;
-        if (num_solutions_for_pheromone_update > 1) {
-            for (int i = 0; i < num_solutions_for_pheromone_update; ++i) {
-                for (int j = i + 1; j < num_solutions_for_pheromone_update; ++j) {
-                    avg_hamming += hamming_distance(
-                        iteration_final_solutions[i].customer_permutation,
-                        iteration_final_solutions[j].customer_permutation);
-                    ++count_pairs;
-                }
-            }
-            avg_hamming /= count_pairs;
-        }
-        if (verbose == 1 && num_solutions_for_pheromone_update > 1) {
-            std::cout << "[PACO] Iter " << iter << ": Avg Hamming distance (top-" << t << ") = " << avg_hamming << std::endl;
-        }
 
         // Pheromone evaporation
         for (int i = 0; i < n_nodes; ++i)
@@ -337,29 +334,6 @@ Solution PACO::solve(const VRPInstance& instance, const PACOParams& params, bool
                 }
             }
         }
-
-                // Clamp tau within 3 std from the mean
-        // double tau_sum = 0.0, tau_sq_sum = 0.0;
-        // int tau_count = 0;
-        // for (int i = 0; i < n_nodes; ++i)
-        //     for (int j = 0; j < n_nodes; ++j)
-        //         for (int o = 0; o < 2; ++o)
-        //             if (tau[i][j][o] > 0.0) { // Only count feasible
-        //                 tau_sum += tau[i][j][o];
-        //                 tau_sq_sum += tau[i][j][o] * tau[i][j][o];
-        //                 ++tau_count;
-        //             }
-        // double tau_mean = (tau_count > 0) ? (tau_sum / tau_count) : 0.0;
-        // double tau_min = tau_mean * 0.1; // Minimum pheromone level
-        // double tau_max = tau_mean * 3.0; // Maximum pheromone level
-
-        // for (int i = 0; i < n_nodes; ++i)
-        //     for (int j = 0; j < n_nodes; ++j)
-        //         for (int o = 0; o < 2; ++o) {
-        //             tau[i][j][o] *= (1.0 - rho);
-        //             if (tau[i][j][o] < tau_min) tau[i][j][o] = tau_min; // Clamp to min
-        //             if (tau[i][j][o] > tau_max) tau[i][j][o] = tau_max; // Clamp to max
-        //         }
 
         // Update global best solution
         if (!iteration_final_solutions.empty()) {

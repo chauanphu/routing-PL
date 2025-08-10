@@ -1,9 +1,22 @@
 #include "GA.h"
+#include "../core/SolverFactory.h"
 #include <vector>
 #include <unordered_map>
 #include <random>
 #include <algorithm>
 #include <limits>
+
+namespace {
+    SolverRegistrar<GA> registrar("ga");
+}
+
+struct GAParams {
+    int population_size = 50;
+    int generations = 1000;
+    double crossover_rate = 0.8;
+    double mutation_rate = 0.2;
+    double p = 0.5; // for type-III locker assignment
+};
 
 // Helper: initialize the initial solution for GA (same as SA)
 static void initialize_solution(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int, int>& customer2node, double p = 0.5) {
@@ -140,7 +153,7 @@ static int tournament(const std::vector<double>& fitness, std::mt19937& gen) {
     return (fitness[i] < fitness[j]) ? i : j;
 }
 
-Solution GA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const GAParams& params) {
+static Solution iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const GAParams& params) {
     int n = customer_perm.size();
     int pop_size = params.population_size;
     int generations = params.generations;
@@ -194,15 +207,17 @@ Solution GA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
     return best_sol;
 }
 
-Solution GA::solve(const VRPInstance& instance, const GAParams& params) {
+Solution GA::solve(const VRPInstance& instance, const YAML::Node& params_node, bool history, int verbose) {
+    GAParams params;
+    params.population_size = params_node["population_size"].as<int>();
+    params.generations = params_node["generations"].as<int>();
+    params.crossover_rate = params_node["crossover_rate"].as<double>();
+    params.mutation_rate = params_node["mutation_rate"].as<double>();
+    params.p = params_node["p"].as<double>();
+
     int n = instance.num_customers;
     std::vector<int> customer_perm;
     std::unordered_map<int, int> customer2node;
     initialize_solution(instance, customer_perm, customer2node, params.p);
     return iterate(instance, customer_perm, customer2node, params);
-}
-
-Solution GA::solve(const VRPInstance& instance) {
-    GAParams params;
-    return solve(instance, params);
 }

@@ -1,9 +1,6 @@
 #include "core/InstanceParser.h"
 #include "solvers/Solver.h"
-#include "solvers/SA.h"
-#include "solvers/GA.h"
-#include "solvers/ACO_TS.h"
-#include "solvers/PACO.h" // Add PACO include
+#include "core/SolverFactory.h"
 #include <iostream>
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -11,20 +8,17 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
-#include <set> // Include set for completed instances
+#include <set>
+#include <memory>
+#include <numeric>
 
 struct ExperimentParams {
     std::string solver_name;
     std::string exp_size;
-    std::string instance_file;
-    SAParams sa_params;
-    GAParams ga_params;
-    ACOTSParams aco_params;
-    PACOParams paco_params; // Add PACO params
     std::string output_csv;
     int num_runs;
     std::string data_dir;
-    YAML::Node config;
+    YAML::Node params_node;
     int verbose = 0;
 };
 
@@ -33,10 +27,8 @@ ExperimentParams parse_params(int argc, char* argv[]) {
     params.exp_size = "small";
     params.num_runs = 5;
     params.output_csv = "../output/solutions/output.csv";
-    params.data_dir = "";
-    std::string params_yaml = "";
+    std::string params_yaml_file = "";
 
-    // Parse arguments by key
     for (int i = 1; i < argc; ++i) {
         std::string key = argv[i];
         if (key == "--solver" && i + 1 < argc) {
@@ -44,7 +36,7 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         } else if ((key == "--size" || key == "--exp-size") && i + 1 < argc) {
             params.exp_size = argv[++i];
         } else if (key == "--params" && i + 1 < argc) {
-            params_yaml = argv[++i];
+            params_yaml_file = argv[++i];
         } else if (key == "--instances" && i + 1 < argc) {
             params.data_dir = argv[++i];
         } else if (key == "--num-runs" && i + 1 < argc) {
@@ -56,80 +48,31 @@ ExperimentParams parse_params(int argc, char* argv[]) {
         }
     }
 
-    // Check required arguments
-    if (params.solver_name.empty() || params_yaml.empty()) {
+    if (params.solver_name.empty() || params_yaml_file.empty()) {
         std::cerr << "Usage: ./main --solver <name> --params <param_file.yaml> [--instances <dir>] [--num-runs <int>] [--output <output_file.csv>] [--size <experiment_size>] [--verbose <level> | -v <level>]" << std::endl;
         exit(1);
     }
 
-    params.config = YAML::LoadFile(params_yaml);
-    if (!params.config[params.exp_size]) {
-        std::cerr << "Experiment size '" << params.exp_size << "' not found in " << params_yaml << std::endl;
+    YAML::Node config = YAML::LoadFile(params_yaml_file);
+    if (!config[params.exp_size]) {
+        std::cerr << "Experiment size '" << params.exp_size << "' not found in " << params_yaml_file << std::endl;
         exit(1);
     }
 
-    // If not set by CLI, get from YAML
-    if (params.data_dir.empty() && params.config[params.exp_size]["data_dir"])
-        params.data_dir = params.config[params.exp_size]["data_dir"].as<std::string>();
-    if (params.output_csv == "../output/solutions/output.csv" && params.config[params.exp_size]["output_csv"])
-        params.output_csv = params.config[params.exp_size]["output_csv"].as<std::string>();
-    if (params.num_runs == 5 && params.config[params.exp_size]["num_runs"])
-        params.num_runs = params.config[params.exp_size]["num_runs"].as<int>();
+    auto exp_config = config[params.exp_size];
+    if (params.data_dir.empty() && exp_config["data_dir"])
+        params.data_dir = exp_config["data_dir"].as<std::string>();
+    if (params.output_csv == "../output/solutions/output.csv" && exp_config["output_csv"])
+        params.output_csv = exp_config["output_csv"].as<std::string>();
+    if (params.num_runs == 5 && exp_config["num_runs"])
+        params.num_runs = exp_config["num_runs"].as<int>();
 
-    // ...existing solver param parsing code...
-    if (params.solver_name == "sa") {
-        auto sa_params_node = params.config[params.exp_size]["sa_params"];
-        params.sa_params.max_iter = sa_params_node["max_iter"].as<int>();
-        params.sa_params.T0 = sa_params_node["T0"].as<double>();
-        params.sa_params.Tf = sa_params_node["Tf"].as<double>();
-        params.sa_params.alpha = sa_params_node["alpha"].as<double>();
-        params.sa_params.beta = sa_params_node["beta"].as<double>();
-        params.sa_params.patience = sa_params_node["patience"].as<int>();
-        params.sa_params.p = sa_params_node["p"].as<double>();
-    } else if (params.solver_name == "ga") {
-        auto ga_params_node = params.config[params.exp_size]["ga_params"];
-        if (!ga_params_node) {
-            std::cerr << "ga_params not found in " << params_yaml << std::endl;
-            exit(1);
-        }
-        params.ga_params.population_size = ga_params_node["population_size"].as<int>();
-        params.ga_params.generations = ga_params_node["generations"].as<int>();
-        params.ga_params.crossover_rate = ga_params_node["crossover_rate"].as<double>();
-        params.ga_params.mutation_rate = ga_params_node["mutation_rate"].as<double>();
-        params.ga_params.p = ga_params_node["p"].as<double>();
-    } else if (params.solver_name == "aco-ts") {
-        auto aco_params_node = params.config[params.exp_size]["params"];
-        if (!aco_params_node) {
-            std::cerr << "params not found in " << params_yaml << std::endl;
-            exit(1);
-        }
-        params.aco_params.num_ants = aco_params_node["num_ants"].as<int>();
-        params.aco_params.num_iterations = aco_params_node["num_iterations"].as<int>();
-        params.aco_params.alpha = aco_params_node["alpha"].as<double>();
-        params.aco_params.beta = aco_params_node["beta"].as<double>();
-        params.aco_params.rho = aco_params_node["evaporation_rate"].as<double>();
-        params.aco_params.Q = aco_params_node["Q"].as<double>();
-        params.aco_params.stagnation_limit = aco_params_node["stagnation_limit"] ? aco_params_node["stagnation_limit"].as<int>() : 10;
-        params.aco_params.p = aco_params_node["p"] ? aco_params_node["p"].as<double>() : 0.1;
-    } else if (params.solver_name == "paco") {
-        auto paco_params_node = params.config[params.exp_size]["params"];
-        if (!paco_params_node) {
-            std::cerr << "params not found in " << params_yaml << std::endl;
-            exit(1);
-        }
-        params.paco_params.m = paco_params_node["m"].as<int>();
-        params.paco_params.alpha = paco_params_node["alpha"].as<double>();
-        params.paco_params.beta = paco_params_node["beta"].as<double>();
-        params.paco_params.rho = paco_params_node["rho"].as<double>();
-        params.paco_params.Q = paco_params_node["Q"].as<double>();
-        params.paco_params.I = paco_params_node["I"].as<int>();
-        params.paco_params.t = paco_params_node["t"].as<int>();
-        params.paco_params.p = paco_params_node["p"].as<int>();
-        params.paco_params.LS = paco_params_node["LS"].as<int>();
-    } else {
-        std::cerr << "Unknown solver: " << params.solver_name << std::endl;
+    params.params_node = exp_config["params"];
+    if (!params.params_node) {
+        std::cerr << "Error: 'params' section for experiment size '" << params.exp_size << "' not found in " << params_yaml_file << std::endl;
         exit(1);
     }
+
     return params;
 }
 
@@ -159,7 +102,6 @@ std::vector<std::string> load_instance_files(const ExperimentParams& params) {
         int num_b = get_num(b);
         return num_a < num_b;
     });
-    // Print all loaded instance files
     std::cout << "Loaded instance files (" << instance_files.size() << "):" << std::endl;
     for (const auto& f : instance_files) {
         std::cout << "  " << std::filesystem::path(f).filename().string() << std::endl;
@@ -167,59 +109,26 @@ std::vector<std::string> load_instance_files(const ExperimentParams& params) {
     return instance_files;
 }
 
-// Utility to load completed instance names from CSV
 std::set<std::string> load_completed_instances(const std::string& output_csv) {
     std::set<std::string> completed;
     std::ifstream ifs(output_csv);
+    if (!ifs.is_open()) return completed;
     std::string line;
-    // Skip header
-    std::getline(ifs, line);
+    std::getline(ifs, line); // Skip header
     while (std::getline(ifs, line)) {
         if (line.empty()) continue;
         auto comma = line.find(',');
         if (comma != std::string::npos) {
-            std::string instance_name = line.substr(0, comma);
-            completed.insert(instance_name);
+            completed.insert(line.substr(0, comma));
         }
     }
     return completed;
 }
 
 void print_params(const ExperimentParams& params) {
-    std::cout << "Loaded parameters for experiment size: " << params.exp_size << std::endl;
-    if (params.solver_name == "sa") {
-        std::cout << "  max_iter: " << params.sa_params.max_iter << std::endl;
-        std::cout << "  T0: " << params.sa_params.T0 << std::endl;
-        std::cout << "  Tf: " << params.sa_params.Tf << std::endl;
-        std::cout << "  alpha: " << params.sa_params.alpha << std::endl;
-        std::cout << "  beta: " << params.sa_params.beta << std::endl;
-        std::cout << "  patience: " << params.sa_params.patience << std::endl;
-        std::cout << "  p: " << params.sa_params.p << std::endl;
-    } else if (params.solver_name == "ga") {
-        std::cout << "  population_size: " << params.ga_params.population_size << std::endl;
-        std::cout << "  generations: " << params.ga_params.generations << std::endl;
-        std::cout << "  crossover_rate: " << params.ga_params.crossover_rate << std::endl;
-        std::cout << "  mutation_rate: " << params.ga_params.mutation_rate << std::endl;
-        std::cout << "  p: " << params.ga_params.p << std::endl;
-    } else if (params.solver_name == "aco-ts") {
-        std::cout << "  num_ants: " << params.aco_params.num_ants << std::endl;
-        std::cout << "  num_iterations: " << params.aco_params.num_iterations << std::endl;
-        std::cout << "  alpha: " << params.aco_params.alpha << std::endl;
-        std::cout << "  beta: " << params.aco_params.beta << std::endl;
-        std::cout << "  rho: " << params.aco_params.rho << std::endl;
-        std::cout << "  Q: " << params.aco_params.Q << std::endl;
-        std::cout << "  stagnation_limit: " << params.aco_params.stagnation_limit << std::endl;
-        std::cout << "  p: " << params.aco_params.p << std::endl;
-    } else if (params.solver_name == "paco") {
-        std::cout << "  m: " << params.paco_params.m << std::endl;
-        std::cout << "  alpha: " << params.paco_params.alpha << std::endl;
-        std::cout << "  beta: " << params.paco_params.beta << std::endl;
-        std::cout << "  rho: " << params.paco_params.rho << std::endl;
-        std::cout << "  Q: " << params.paco_params.Q << std::endl;
-        std::cout << "  I: " << params.paco_params.I << std::endl;
-        std::cout << "  t: " << params.paco_params.t << std::endl;
-        std::cout << "  p: " << params.paco_params.p << std::endl;
-        std::cout << "  LS: " << params.paco_params.LS << std::endl;
+    std::cout << "Loaded parameters for solver '" << params.solver_name << "' and size '" << params.exp_size << "':" << std::endl;
+    for (const auto& it : params.params_node) {
+        std::cout << "  " << it.first.as<std::string>() << ": " << it.second.as<std::string>() << std::endl;
     }
     std::cout << "  num_runs: " << params.num_runs << std::endl;
     std::cout << "  output_csv: " << params.output_csv << std::endl;
@@ -228,9 +137,9 @@ void print_params(const ExperimentParams& params) {
 }
 
 void run_experiment(const ExperimentParams& params, const std::vector<std::string>& instance_files_unsorted) {
-    // Make a sorted copy of instance_files
     std::vector<std::string> instance_files = instance_files_unsorted;
     std::sort(instance_files.begin(), instance_files.end());
+    
     std::set<std::string> completed_instances;
     bool file_exists = std::filesystem::exists(params.output_csv);
     if (file_exists) {
@@ -244,52 +153,59 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
         ofs.open(params.output_csv);
         ofs << "instance_name,Num Vehicles,Best Distance,AVG Distance,Std Distance,AVG Runtime (s),Std Runtime (s)\n";
     }
+
     for (const auto& file : instance_files) {
         std::string instance_name = std::filesystem::path(file).filename().string();
         if (completed_instances.count(instance_name)) {
             std::cout << "Skipping already completed instance: " << instance_name << std::endl;
             continue;
         }
+
         std::cout << "\nProcessing instance: " << file << std::endl;
         std::vector<double> distances, runtimes;
         int best_num_vehicles = 0;
-        double best_distance = 1e12;
+        double best_distance = std::numeric_limits<double>::max();
+
+        std::unique_ptr<Solver> solver = SolverFactory::create(params.solver_name);
+        if (!solver) {
+            std::cerr << "Unknown or unregistered solver: " << params.solver_name << std::endl;
+            continue; 
+        }
+
         for (int run = 0; run < params.num_runs; ++run) {
             auto start = std::chrono::high_resolution_clock::now();
             VRPInstance instance = InstanceParser::parse(file);
             instance.build_distance_matrix();
-            Solution sol;
-            if (params.solver_name == "sa") {
-                sol = SA::solve(instance, params.sa_params, false);
-            } else if (params.solver_name == "ga") {
-                sol = GA::solve(instance, params.ga_params);
-            } else if (params.solver_name == "aco-ts") {
-                sol = ACO_TS::solve(instance, params.aco_params);
-            } else if (params.solver_name == "paco") {
-                sol = PACO::solve(instance, params.paco_params, false, params.verbose);
-            } else {
-                std::cerr << "Unknown solver: " << params.solver_name << std::endl;
-                exit(1);
-            }
+            
+            Solution sol = solver->solve(instance, params.params_node, false, params.verbose);
+            
             auto end = std::chrono::high_resolution_clock::now();
             double runtime = std::chrono::duration<double>(end - start).count();
+            
             runtimes.push_back(runtime);
             distances.push_back(sol.objective_value);
+            
             if (sol.objective_value < best_distance) {
                 best_distance = sol.objective_value;
                 best_num_vehicles = sol.routes.size();
             }
-            std::cout << "  Run " << (run+1) << ": Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
+            std::cout << "  Run " << (run + 1) << ": Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
         }
+
         double avg_dist = 0, std_dist = 0, avg_runtime = 0, std_runtime = 0;
-        for (double d : distances) avg_dist += d;
-        avg_dist /= distances.size();
-        for (double d : distances) std_dist += (d - avg_dist) * (d - avg_dist);
-        std_dist = sqrt(std_dist / distances.size());
-        for (double t : runtimes) avg_runtime += t;
-        avg_runtime /= runtimes.size();
-        for (double t : runtimes) std_runtime += (t - avg_runtime) * (t - avg_runtime);
-        std_runtime = sqrt(std_runtime / runtimes.size());
+        if (!distances.empty()) {
+            double sum_dist = std::accumulate(distances.begin(), distances.end(), 0.0);
+            avg_dist = sum_dist / distances.size();
+            double sq_sum_dist = std::inner_product(distances.begin(), distances.end(), distances.begin(), 0.0);
+            std_dist = std::sqrt(sq_sum_dist / distances.size() - avg_dist * avg_dist);
+        }
+        if (!runtimes.empty()) {
+            double sum_runtime = std::accumulate(runtimes.begin(), runtimes.end(), 0.0);
+            avg_runtime = sum_runtime / runtimes.size();
+            double sq_sum_runtime = std::inner_product(runtimes.begin(), runtimes.end(), runtimes.begin(), 0.0);
+            std_runtime = std::sqrt(sq_sum_runtime / runtimes.size() - avg_runtime * avg_runtime);
+        }
+
         ofs << instance_name << "," << best_num_vehicles << "," << best_distance << "," << avg_dist << "," << std_dist << "," << avg_runtime << "," << std_runtime << "\n";
         ofs.flush();
         std::cout << "Finished: " << instance_name << " Best: " << best_distance << " Avg: " << avg_dist << std::endl;

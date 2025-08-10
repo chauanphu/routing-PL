@@ -9,12 +9,14 @@ file(GLOB SOLVER_SRC src/solvers/*.cpp)
 
 add_executable(main
     src/main.cpp
+    src/utils.cpp
     ${CORE_SRC}
     ${SOLVER_SRC}
 )
 
 add_executable(test
     src/test.cpp
+    src/utils.cpp
     ${CORE_SRC}
     ${SOLVER_SRC}
 )
@@ -24,4 +26,5 @@ find_package(OpenMP REQUIRED)
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
 target_link_libraries(main yaml-cpp OpenMP::OpenMP_CXX)
+
 target_link_libraries(test yaml-cpp OpenMP::OpenMP_CXX)

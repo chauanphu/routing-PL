@@ -1,4 +1,5 @@
 #include "SA.h"
+#include "../core/SolverFactory.h"
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
@@ -6,6 +7,20 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+
+namespace {
+    SolverRegistrar<SA> registrar("sa");
+}
+
+struct SAParams {
+    int max_iter = 1000;
+    double T0 = 10.0;
+    double Tf = 0.1;
+    int patience = 50;
+    double alpha = 0.97;
+    double beta = 1.0;
+    double p = 0.5; // for type-III locker assignment
+};
 
 // Helper: initialize the initial solution for SA
 static void initialize_solution(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int, int>& customer2node, double p = 0.5) {
@@ -85,7 +100,7 @@ static void initialize_solution(const VRPInstance& instance, std::vector<int>& c
     }
 }
 
-Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history) {
+static Solution iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history) {
     Solution sigma_best = Solver::evaluate(instance, customer_perm, customer2node);
     Solution sigma_current = sigma_best;
     int R = 0;
@@ -157,20 +172,19 @@ Solution SA::iterate(const VRPInstance& instance, std::vector<int> customer_perm
     return sigma_best;
 }
 
-// Keep the original solve overloads for backward compatibility
-Solution SA::solve(const VRPInstance& instance) {
+Solution SA::solve(const VRPInstance& instance, const YAML::Node& params_node, bool history, int verbose) {
     SAParams params;
-    return solve(instance, params, false);
-}
+    params.max_iter = params_node["max_iter"].as<int>();
+    params.T0 = params_node["T0"].as<double>();
+    params.Tf = params_node["Tf"].as<double>();
+    params.alpha = params_node["alpha"].as<double>();
+    params.beta = params_node["beta"].as<double>();
+    params.patience = params_node["patience"].as<int>();
+    params.p = params_node["p"].as<double>();
 
-Solution SA::solve(const VRPInstance& instance, const SAParams& params, bool history) {
     int n = instance.num_customers;
     std::vector<int> customer_perm;
     std::unordered_map<int, int> customer2node;
     initialize_solution(instance, customer_perm, customer2node, params.p);
     return iterate(instance, customer_perm, customer2node, params, history);
-}
-
-Solution SA::solve(const VRPInstance& instance, const SAParams& params) {
-    return solve(instance, params, false);
 }
