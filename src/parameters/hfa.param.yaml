@@ -1,23 +1,23 @@
 small:
   data_dir: ../data/25
   params:
-    i_max: 50
-    pop_size: 200
+    i_max: 100
+    pop_size: 500
     c_rate: 0.95
     m_rate: 0.1
     beta: 1.0
     gamma: 0.5
-    p: 0.5
+    p: 0.1
 
 medium:
   params:
-    i_max: 50
-    pop_size: 200
-    c_rate: 0.95
-    m_rate: 0.1
+    i_max: 100
+    pop_size: 1000
+    c_rate: 0.9
+    m_rate: 0.5
     beta: 1.0
     gamma: 0.5
-    p: 0.3
+    p: 0.1
 
 large:
   data_dir: ../data/100

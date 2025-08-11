@@ -49,7 +49,6 @@ static void destroy_random(ALNSSolution& s, const VRPInstance& instance, std::mt
         auto it = std::find(s.perm.begin(), s.perm.end(), c);
         if (it!=s.perm.end()) { s.perm.erase(it); s.removed.push_back(c); }
     }
-    // Optional: merge consecutive zeros (not required functionally)
 }
 // Related (Shaw-style simplified) removal: pick a random seed customer then remove the most "related" (closest) customers.
 static void destroy_related(ALNSSolution& s, const VRPInstance& instance, std::mt19937& gen) {
@@ -65,9 +64,6 @@ static void destroy_related(ALNSSolution& s, const VRPInstance& instance, std::m
     // Access delivery node via s.c2n mapping (fallback to customer id if not found).
     int seed_node = seed; auto itSeed = s.c2n.find(seed); if (itSeed!=s.c2n.end()) seed_node = itSeed->second;
     extern const VRPInstance* __alns_instance_ptr; // forward (will not be used; placeholder if design changes)
-    // We'll need instance distance matrix -> pass via static capture? Not available here; thus we convert this op to no-op.
-    // NOTE: To compute relatedness we require instance distances; adapt destroy signature to include instance for richer logic later.
-    // For now perform a structural placeholder selecting random subset starting from seed.
     std::shuffle(customers.begin(), customers.end(), gen);
     // Ensure seed at front
     auto seed_it = std::find(customers.begin(), customers.end(), seed);
@@ -89,21 +85,41 @@ static void destroy_worst(ALNSSolution& s, const VRPInstance& instance, std::mt1
     const auto& D = instance.distance_matrix;
     struct Cand { int cust; double impact; };
     std::vector<Cand> cands;
-    int start = -1;
-    for (int i=0;i<(int)s.perm.size();++i) {
-        if (s.perm[i]==0) {
-            if (start==-1) { start = i; continue; }
-            // route from start to i (inclusive end zero)
-            for (int pos = start+1; pos < i; ++pos) {
-                int cust = s.perm[pos]; if (cust==0) continue;
-                int prev = s.perm[pos-1];
-                int next = s.perm[pos+1];
-                double impact = D[prev][cust] + D[cust][next] - D[prev][next];
-                cands.push_back({cust, impact});
-            }
-            start = i; // next route starts here
+
+    bool has_delimiters = false;
+    for(int node : s.perm) {
+        if (node == 0) {
+            has_delimiters = true;
+            break;
         }
     }
+
+    if (has_delimiters) {
+        int start = -1;
+        for (int i=0;i<(int)s.perm.size();++i) {
+            if (s.perm[i]==0) {
+                if (start==-1) { start = i; continue; }
+                // route from start to i (inclusive end zero)
+                for (int pos = start+1; pos < i; ++pos) {
+                    int cust = s.perm[pos]; if (cust==0) continue;
+                    int prev = s.perm[pos-1];
+                    int next = s.perm[pos+1];
+                    double impact = D[prev][cust] + D[cust][next] - D[prev][next];
+                    cands.push_back({cust, impact});
+                }
+                start = i; // next route starts here
+            }
+        }
+    } else { // No delimiters, treat as a single tour
+        for (size_t i = 0; i < s.perm.size(); ++i) {
+            int cust = s.perm[i];
+            int prev = s.perm[(i == 0) ? s.perm.size() - 1 : i - 1];
+            int next = s.perm[(i == s.perm.size() - 1) ? 0 : i + 1];
+            double impact = D[prev][cust] + D[cust][next] - D[prev][next];
+            cands.push_back({cust, impact});
+        }
+    }
+
     if (cands.empty()) return;
     std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b){ return a.impact > b.impact; });
     int to_remove = std::max(1, (int)(0.2 * cands.size()));
@@ -114,11 +130,13 @@ static void destroy_worst(ALNSSolution& s, const VRPInstance& instance, std::mt1
         }
     }
     // Clean consecutive zeros
-    std::vector<int> cleaned; cleaned.reserve(s.perm.size()); int prev=-1;
-    for (int v : s.perm) { if (v==0 && prev==0) continue; cleaned.push_back(v); prev=v; }
-    if (cleaned.empty() || cleaned.front()!=0) cleaned.insert(cleaned.begin(),0);
-    if (cleaned.back()!=0) cleaned.push_back(0);
-    s.perm.swap(cleaned);
+    if(has_delimiters) {
+        std::vector<int> cleaned; cleaned.reserve(s.perm.size()); int prev=-1;
+        for (int v : s.perm) { if (v==0 && prev==0) continue; cleaned.push_back(v); prev=v; }
+        if (cleaned.empty() || cleaned.front()!=0) cleaned.insert(cleaned.begin(),0);
+        if (cleaned.back()!=0) cleaned.push_back(0);
+        s.perm.swap(cleaned);
+    }
 }
 
 // Utility: compute best insertion positions for a customer; returns vector of (index_before_insert, cost)
@@ -218,7 +236,19 @@ static ALNSSolution iterate(const VRPInstance& instance, const ALNSParams& param
             std::cout << "[ALNS] iter " << it << " selected destroy_op=" << d_idx << " repair_op=" << r_idx << "\n";
         }
     destroy_ops[d_idx](trial, instance, gen);
+        if (verbose >= 3) {
+            std::cout << "  [DEBUG] After destroy: ";
+            for(int customer : trial.perm) std::cout << customer << " ";
+            std::cout << "| Removed: ";
+            for(int customer : trial.removed) std::cout << customer << " ";
+            std::cout << std::endl;
+        }
         repair_ops[r_idx](trial, instance, gen);
+        if (verbose >= 3) {
+            std::cout << "  [DEBUG] After repair:  ";
+            for(int customer : trial.perm) std::cout << customer << " ";
+            std::cout << std::endl;
+        }
         // Re-evaluate (placeholder: full rebuild already inside ops ideally)
         trial.fitness = Solver::evaluate(instance, trial.perm, trial.c2n, false).objective_value;
         double delta = trial.fitness - current.fitness;
@@ -229,7 +259,7 @@ static ALNSSolution iterate(const VRPInstance& instance, const ALNSParams& param
             if (ru(gen) < prob) accept = true;
         }
         if (accept) current = trial;
-        if (trial.fitness < best.fitness) {
+        if (trial.fitness < best.fitness) { // Best reward found
             best = trial;
             destroy_scores[d_idx].score += params.reward_1;
             repair_scores[r_idx].score += params.reward_1;
