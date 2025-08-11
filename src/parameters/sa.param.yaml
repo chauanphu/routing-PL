@@ -1,12 +1,12 @@
 small:
   data_dir: ../data/25
   params:
-    max_iter: 6000
+    max_iter: 10000
     T0: 10.0
     Tf: 0.1
     alpha: 0.97
     beta: 1.0
-    patience: 50
+    patience: 100
     p: 0.5
   num_runs: 5
   output_csv: ../output/solutions/small.csv

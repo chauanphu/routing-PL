@@ -20,6 +20,9 @@ void initialize_solution(const VRPInstance& instance, std::vector<int>& customer
 
 // Random initialization with delimiters aware of capacity, time windows, and locker duplication.
 void random_init(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int,int>& customer2node, double p);
+
+// Initialization without depot delimiters: random mode assignment then nearest-neighbor ordering of customers only.
+void no_delim_init(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int,int>& customer2node, double p);
 } // namespace utils
 
 #endif // UTILS_H

@@ -1,0 +1,35 @@
+small:
+  params:
+    iterations: 1000000
+    p: 0.1                   # type-III assignment probability
+    w_decay: 0.8             # reaction factor for adaptive weights
+    reward_1: 5.0
+    reward_2: 2.0
+    reward_3: 1.0 # operator rewards
+    init_temp: 100.0        # initial temperature
+    cooling: 0.99999       # geometric cooling factor per iteration
+    min_temp: 1e-3
+medium:
+  params:
+    iterations: 1000          # hard cap on iterations
+    destroy_ops: 0           # (unused yet) explicit counts if needed
+    repair_ops: 0
+    w_decay: 0.8             # reaction factor for adaptive weights
+    reward_1: 5.0
+    reward_2: 2.0
+    reward_3: 1.0 # operator rewards
+    init_temp: 100.0        # initial temperature
+    cooling: 0.995         # geometric cooling factor per iteration
+    p: 0.3                   # type-III assignment probability
+large:
+  params:
+    iterations: 1000          # hard cap on iterations
+    destroy_ops: 0           # (unused yet) explicit counts if needed
+    repair_ops: 0
+    w_decay: 0.8             # reaction factor for adaptive weights
+    reward_1: 5.0
+    reward_2: 2.0
+    reward_3: 1.0 # operator rewards
+    init_temp: 100.0        # initial temperature
+    cooling: 0.995         # geometric cooling factor per iteration
+    p: 0.1                   # type-III assignment probability

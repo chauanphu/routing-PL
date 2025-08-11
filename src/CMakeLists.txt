@@ -4,8 +4,9 @@ project(vrppl_loader)
 set(CMAKE_CXX_STANDARD 17)
 
 # Gather source files from new structure
-file(GLOB CORE_SRC src/core/*.cpp)
-file(GLOB SOLVER_SRC src/solvers/*.cpp)
+# Use CONFIGURE_DEPENDS so CMake regenerates when new source files are added (e.g., ALNS.cpp)
+file(GLOB CORE_SRC CONFIGURE_DEPENDS src/core/*.cpp)
+file(GLOB SOLVER_SRC CONFIGURE_DEPENDS src/solvers/*.cpp)
 
 add_executable(main
     src/main.cpp
