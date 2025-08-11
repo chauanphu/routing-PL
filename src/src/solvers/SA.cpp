@@ -22,85 +22,7 @@ struct SAParams {
     double p = 0.5; // for type-III locker assignment
 };
 
-// Helper: initialize the initial solution for SA
-static void initialize_solution(const VRPInstance& instance, std::vector<int>& customer_perm, std::unordered_map<int, int>& customer2node, double p = 0.5) {
-    int n = instance.num_customers;
-    customer_perm.clear();
-    customer2node.clear();
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> prob(0.0, 1.0);
-    // Step 1: assign delivery nodes for each customer as before
-    std::vector<int> assigned_delivery_node(n, -1);
-    for (int i = 0; i < n; ++i) {
-        auto c = instance.customers[i];
-        if (c->customer_type == 1) {
-            assigned_delivery_node[i] = c->id;
-        } else if (c->customer_type == 2) {
-            int assigned = -1;
-            if (!instance.customer_preferences.empty() && i < instance.customer_preferences.size()) {
-                for (size_t j = 0; j < instance.customer_preferences[i].size(); ++j) {
-                    if (instance.customer_preferences[i][j] == 1) {
-                        assigned = instance.lockers[j]->id;
-                        break;
-                    }
-                }
-            }
-            if (assigned != -1) {
-                assigned_delivery_node[i] = assigned;
-            } else if (!instance.lockers.empty()) {
-                assigned_delivery_node[i] = instance.lockers[0]->id;
-            } else {
-                assigned_delivery_node[i] = c->id; // fallback
-            }
-        } else if (c->customer_type == 3) {
-            double r = prob(gen);
-            int assigned = -1;
-            if (r >= p) {
-                if (!instance.customer_preferences.empty() && i < instance.customer_preferences.size()) {
-                    for (size_t j = 0; j < instance.customer_preferences[i].size(); ++j) {
-                        if (instance.customer_preferences[i][j] == 1) {
-                            assigned = instance.lockers[j]->id;
-                            break;
-                        }
-                    }
-                }
-                if (assigned != -1) {
-                    assigned_delivery_node[i] = assigned;
-                } else if (!instance.lockers.empty()) {
-                    assigned_delivery_node[i] = instance.lockers[0]->id;
-                } else {
-                    assigned_delivery_node[i] = c->id; // fallback
-                }
-            } else {
-                assigned_delivery_node[i] = c->id;
-            }
-        }
-        customer2node[c->id] = assigned_delivery_node[i];
-    }
-    // Step 2: nearest neighbor assignment for permutation
-    std::vector<bool> assigned(n, false);
-    int current_node = 0; // depot
-    for (int step = 0; step < n; ++step) {
-        double min_dist = std::numeric_limits<double>::max();
-        int next_customer = -1;
-        for (int i = 0; i < n; ++i) {
-            if (assigned[i]) continue;
-            int delivery_node = assigned_delivery_node[i];
-            double dist = instance.distance_matrix[current_node][delivery_node];
-            if (dist < min_dist) {
-                min_dist = dist;
-                next_customer = i;
-            }
-        }
-        if (next_customer == -1) break;
-        assigned[next_customer] = true;
-        customer_perm.push_back(next_customer + 1); // customer IDs are 1-based
-        current_node = assigned_delivery_node[next_customer];
-    }
-}
-
-static Solution iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history) {
+static Solution iterate(const VRPInstance& instance, std::vector<int> customer_perm, std::unordered_map<int, int> customer2node, const SAParams& params, bool history, int verbose) {
     Solution sigma_best = Solver::evaluate(instance, customer_perm, customer2node);
     Solution sigma_current = sigma_best;
     int R = 0;
@@ -112,6 +34,7 @@ static Solution iterate(const VRPInstance& instance, std::vector<int> customer_p
     int n = customer_perm.size();
     std::vector<double> convergence_history;
     if (history) convergence_history.push_back(sigma_best.objective_value);
+    int outer_iter = 0;
     while (R < params.patience && T > params.Tf) {
         for (int iter = 0; iter < params.max_iter; ++iter) {
             std::vector<int> new_perm = customer_perm;
@@ -153,6 +76,10 @@ static Solution iterate(const VRPInstance& instance, std::vector<int> customer_p
             }
         }
         T *= params.alpha;
+        if (verbose >= 2) {
+            std::cout << "[SA] OuterIter " << outer_iter << " best = " << sigma_best.objective_value << " T=" << T << "\n";
+        }
+        ++outer_iter;
         if (history) convergence_history.push_back(sigma_best.objective_value);
         if (FBS) {
             FBS = false;
@@ -182,9 +109,10 @@ Solution SA::solve(const VRPInstance& instance, const YAML::Node& params_node, b
     params.patience = params_node["patience"].as<int>();
     params.p = params_node["p"].as<double>();
 
-    int n = instance.num_customers;
+    // Initialize customer-to-node mapping
     std::vector<int> customer_perm;
     std::unordered_map<int, int> customer2node;
-    initialize_solution(instance, customer_perm, customer2node, params.p);
-    return iterate(instance, customer_perm, customer2node, params, history);
+    utils::random_init(instance, customer_perm, customer2node, params.p);
+
+    return iterate(instance, customer_perm, customer2node, params, history, verbose);
 }
