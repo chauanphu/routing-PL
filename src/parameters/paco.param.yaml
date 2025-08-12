@@ -4,7 +4,7 @@ small:
     m: 15
     I: 10 # Number of iterations
     p: 64
-    LS: 30 # Number of local search iterations
+    LS: 0 # Number of local search iterations
     t: 10
     Q: 2.0
     alpha: 1.25

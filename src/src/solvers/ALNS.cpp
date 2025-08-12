@@ -12,9 +12,7 @@
 namespace { SolverRegistrar<ALNS> registrar("alns"); }
 
 struct ALNSParams {
-    int iterations = 1000;          // hard cap on iterations
-    int destroy_ops = 0;            // (unused yet) explicit counts if needed
-    int repair_ops = 0;
+    int iterations = 1000;
     double p = 0.5;                 // type-III assignment probability
     double w_decay = 0.8;           // reaction factor for adaptive weights
     double reward_1 = 5.0, reward_2 = 2.0, reward_3 = 1.0; // operator rewards
@@ -22,6 +20,11 @@ struct ALNSParams {
     double init_temp = 100.0;       // initial temperature
     double cooling   = 0.995;       // geometric cooling factor per iteration
     double min_temp  = 1e-3;        // minimum temperature stopping criterion
+    // Local search parameters
+    bool enable_locker_grouping = true; // enable locker grouping local search
+    bool enable_sa_moves = true;        // enable SA-style neighborhood moves
+    int local_search_frequency = 1;    // apply local search every N iterations
+    int min_local_moves = 10;           // maximum SA-style moves per local search
 };
 
 struct OperatorScore { double weight=1.0; double score=0.0; int usage=0; };
@@ -31,6 +34,199 @@ struct ALNSSolution { std::vector<int> perm; std::unordered_map<int,int> c2n; do
 static ALNSSolution evaluate_sol(const VRPInstance& instance, std::vector<int> perm, std::unordered_map<int,int> c2n) {
     ALNSSolution s; s.perm = std::move(perm); s.c2n = std::move(c2n); s.fitness = Solver::evaluate(instance, s.perm, s.c2n, false).objective_value; return s; }
 
+// ---- Locker Grouping Local Search Helpers ------------------------------------------
+// Check if a delivery node is a locker (node ID > num_customers)
+static bool is_locker_delivery(int delivery_node, const VRPInstance& instance) {
+    return delivery_node > instance.num_customers;
+}
+
+// Get the locker ID from a delivery node (assumes it's already verified to be a locker)
+static int get_locker_id(int delivery_node, const VRPInstance& instance) {
+    return delivery_node - instance.num_customers; // Convert to 0-based locker index
+}
+
+// Check if a customer can use a specific locker based on preferences
+static bool can_use_locker(int customer_id, int locker_delivery_node, const VRPInstance& instance) {
+    int customer_idx = customer_id - 1; // Convert to 0-based index
+    if (customer_idx < 0 || customer_idx >= instance.num_customers) return false;
+    
+    auto customer = instance.customers[customer_idx];
+    // Type 1 (home only) cannot use lockers
+    if (customer->customer_type == 1) return false;
+    // Type 2 and 3 can use lockers if they have preference
+    
+    int locker_idx = get_locker_id(locker_delivery_node, instance);
+    if (locker_idx < 0 || locker_idx >= (int)instance.customer_preferences[customer_idx].size()) return false;
+    
+    return instance.customer_preferences[customer_idx][locker_idx] == 1;
+}
+
+// Apply locker grouping optimization to group customers using the same locker
+static void apply_locker_grouping_optimization(ALNSSolution& solution, const VRPInstance& instance) {
+    auto& perm = solution.perm;
+    auto& c2n = solution.c2n;
+    
+    bool improved = true;
+    int max_iterations = 3; // Limit iterations to avoid infinite loops
+    int iteration = 0;
+    
+    while (improved && iteration < max_iterations) {
+        improved = false;
+        iteration++;
+        
+        // Scan for patterns: locker_cust_A -> home_cust_B -> locker_cust_C (same locker)
+        for (int i = 0; i < (int)perm.size() - 2; i++) {
+            if (perm[i] == 0) continue; // skip depot
+            
+            int cust_A = perm[i];
+            int cust_B = perm[i + 1];
+            int cust_C = perm[i + 2];
+            
+            if (cust_B == 0 || cust_C == 0) continue; // don't cross route boundaries
+            
+            int node_A = c2n[cust_A];
+            int node_B = c2n[cust_B];
+            int node_C = c2n[cust_C];
+            
+            // Check pattern: locker -> home -> locker (same locker)
+            if (is_locker_delivery(node_A, instance) && 
+                !is_locker_delivery(node_B, instance) && 
+                is_locker_delivery(node_C, instance) &&
+                node_A == node_C) {
+                
+                // Try switching customer B to the same locker
+                if (can_use_locker(cust_B, node_A, instance)) {
+                    c2n[cust_B] = node_A;
+                    improved = true;
+                    continue;
+                }
+                
+                // Try swapping positions of B and C
+                std::swap(perm[i + 1], perm[i + 2]);
+                improved = true;
+            }
+        }
+        
+        // Additional pattern: look for flexible customers (type 3) between lockers and try to group them
+        for (int i = 0; i < (int)perm.size() - 1; i++) {
+            if (perm[i] == 0) continue;
+            
+            int cust_A = perm[i];
+            int node_A = c2n[cust_A];
+            
+            // If customer A uses a locker, look for nearby flexible customers to group
+            if (is_locker_delivery(node_A, instance)) {
+                for (int j = i + 1; j < std::min(i + 5, (int)perm.size()); j++) {
+                    if (perm[j] == 0) break; // don't cross route boundaries
+                    
+                    int cust_B = perm[j];
+                    int customer_idx_B = cust_B - 1;
+                    
+                    // Check if customer B is flexible (type 3) and not using the same locker
+                    if (customer_idx_B >= 0 && customer_idx_B < instance.num_customers &&
+                        instance.customers[customer_idx_B]->customer_type == 3 &&
+                        c2n[cust_B] != node_A &&
+                        can_use_locker(cust_B, node_A, instance)) {
+                        
+                        c2n[cust_B] = node_A;
+                        improved = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Apply SA-style neighborhood moves for local optimization
+static void apply_sa_style_moves(ALNSSolution& solution, const VRPInstance& instance, std::mt19937& gen, int min_moves) {
+    auto& perm = solution.perm;
+    auto& c2n = solution.c2n;
+    
+    // Collect non-depot customers for neighborhood operations
+    std::vector<int> customer_indices;
+    for (int i = 0; i < (int)perm.size(); i++) {
+        if (perm[i] != 0) {
+            customer_indices.push_back(i);
+        }
+    }
+    
+    if (customer_indices.size() < 2) return;
+    
+    std::uniform_real_distribution<> prob(0.0, 1.0);
+    std::uniform_int_distribution<> idx_dist(0, customer_indices.size() - 1);
+    
+    int num_moves = std::max(min_moves, (int)customer_indices.size()); // Limit number of moves
+    
+    for (int move = 0; move < num_moves; move++) {
+        double current_fitness = solution.fitness;
+        ALNSSolution trial = solution;
+        
+        double r = prob(gen);
+        
+        if (r <= 1.0/3) {
+            // Swap move
+            int i = idx_dist(gen);
+            int j = idx_dist(gen);
+            if (i != j) {
+                int pos_i = customer_indices[i];
+                int pos_j = customer_indices[j];
+                std::swap(trial.perm[pos_i], trial.perm[pos_j]);
+            }
+        } else if (r <= 2.0/3) {
+            // Relocate move
+            int i = idx_dist(gen);
+            int j = idx_dist(gen);
+            if (i != j) {
+                int pos_i = customer_indices[i];
+                int pos_j = customer_indices[j];
+                int customer = trial.perm[pos_i];
+                trial.perm.erase(trial.perm.begin() + pos_i);
+                // Adjust position after removal
+                if (pos_j > pos_i) pos_j--;
+                trial.perm.insert(trial.perm.begin() + pos_j, customer);
+            }
+        } else {
+            // 2-opt move (reverse segment)
+            int i = idx_dist(gen);
+            int j = idx_dist(gen);
+            if (i != j) {
+                int pos_i = customer_indices[i];
+                int pos_j = customer_indices[j];
+                if (pos_i > pos_j) std::swap(pos_i, pos_j);
+                std::reverse(trial.perm.begin() + pos_i, trial.perm.begin() + pos_j + 1);
+            }
+        }
+        
+        // Evaluate the trial solution
+        trial.fitness = Solver::evaluate(instance, trial.perm, trial.c2n, false).objective_value;
+        
+        // Accept if improvement found
+        if (trial.fitness < current_fitness) {
+            solution = trial;
+            // Update customer indices for next iteration
+            customer_indices.clear();
+            for (int i = 0; i < (int)solution.perm.size(); i++) {
+                if (solution.perm[i] != 0) {
+                    customer_indices.push_back(i);
+                }
+            }
+        }
+    }
+}
+
+// Apply comprehensive local search including SA-style neighborhood moves
+static void apply_local_search(ALNSSolution& solution, const VRPInstance& instance, std::mt19937& gen, const ALNSParams& params) {
+    auto& perm = solution.perm;
+    auto& c2n = solution.c2n;
+    
+    // Phase 1: Locker grouping optimization
+    apply_locker_grouping_optimization(solution, instance);
+    
+    // Phase 2: SA-style neighborhood moves
+    if (params.enable_sa_moves) {
+        apply_sa_style_moves(solution, instance, gen, params.min_local_moves);
+    }
+}
 // ---- Destroy Operators -------------------------------------------------------------
 // Random removal: remove a fraction of customers uniformly at random.
 static void destroy_random(ALNSSolution& s, const VRPInstance& instance, std::mt19937& gen) {
@@ -249,6 +445,17 @@ static ALNSSolution iterate(const VRPInstance& instance, const ALNSParams& param
             for(int customer : trial.perm) std::cout << customer << " ";
             std::cout << std::endl;
         }
+        
+        // Apply comprehensive local search (locker grouping + SA-style moves)
+        if (params.enable_locker_grouping && (it % params.local_search_frequency == 0)) {
+            apply_local_search(trial, instance, gen, params);
+            if (verbose >= 3) {
+                std::cout << "  [DEBUG] After local search:  ";
+                for(int customer : trial.perm) std::cout << customer << " ";
+                std::cout << std::endl;
+            }
+        }
+        
         // Re-evaluate (placeholder: full rebuild already inside ops ideally)
         trial.fitness = Solver::evaluate(instance, trial.perm, trial.c2n, false).objective_value;
         double delta = trial.fitness - current.fitness;
@@ -305,6 +512,10 @@ Solution ALNS::solve(const VRPInstance& instance, const YAML::Node& params_node,
     if (params_node["init_temp"]) params.init_temp = params_node["init_temp"].as<double>();
     if (params_node["cooling"]) params.cooling = params_node["cooling"].as<double>();
     if (params_node["min_temp"]) params.min_temp = params_node["min_temp"].as<double>();
+    if (params_node["enable_locker_grouping"]) params.enable_locker_grouping = params_node["enable_locker_grouping"].as<bool>();
+    if (params_node["enable_sa_moves"]) params.enable_sa_moves = params_node["enable_sa_moves"].as<bool>();
+    if (params_node["local_search_frequency"]) params.local_search_frequency = params_node["local_search_frequency"].as<int>();
+    if (params_node["min_local_moves"]) params.min_local_moves = params_node["min_local_moves"].as<int>();
     std::vector<double> convergence_history;
     ALNSSolution best = iterate(instance, params, verbose, history ? &convergence_history : nullptr);
     if (history) {

@@ -88,43 +88,6 @@ paco_construct_solution(const VRPInstance& instance,
     return {perm, customer2node};
 }
 
-// --- GA operators for elitist ants ---
-// Order Crossover (OX) for permutations
-static std::vector<int> order_crossover(const std::vector<int>& parent1, const std::vector<int>& parent2, std::mt19937& gen) {
-    int n = parent1.size();
-    std::uniform_int_distribution<> dist(0, n - 1);
-    int a = dist(gen), b = dist(gen);
-    if (a > b) std::swap(a, b);
-    std::vector<int> child(n, -1);
-    std::set<int> in_child;
-    // Copy slice from parent1
-    for (int i = a; i <= b; ++i) {
-        child[i] = parent1[i];
-        in_child.insert(parent1[i]);
-    }
-    // Fill from parent2
-    int j = (b + 1) % n;
-    for (int k = 0; k < n; ++k) {
-        int idx = (b + 1 + k) % n;
-        if (in_child.count(parent2[idx]) == 0) {
-            child[j] = parent2[idx];
-            in_child.insert(parent2[idx]);
-            j = (j + 1) % n;
-        }
-    }
-    return child;
-}
-
-// Swap mutation
-static void mutate(std::vector<int>& perm, std::mt19937& gen, double mutation_rate = 0.2) {
-    std::uniform_real_distribution<> prob(0.0, 1.0);
-    if (prob(gen) < mutation_rate && perm.size() > 1) {
-        std::uniform_int_distribution<> dist(0, perm.size() - 1);
-        int i = dist(gen), j = dist(gen);
-        if (i != j) std::swap(perm[i], perm[j]);
-    }
-}
-
 // Helper: Compute Hamming distance between two permutations
 static int hamming_distance(const std::vector<int>& a, const std::vector<int>& b) {
     int n = std::min(a.size(), b.size());

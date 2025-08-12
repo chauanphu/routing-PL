@@ -24,6 +24,7 @@ struct FAParams {
     double beta; // Actractiveness coeff
     double gamma; // Light absoprtion rate
     double p = 0.5; // for type-III assignment
+    int ls_intensity = 1;
 };
 
 // Solution hfa(const VRPInstance& instance, const YAML::Node& params_node, bool history, int verbose) {
@@ -189,42 +190,102 @@ static void op_mutation(std::vector<int>& perm, double m_rate, std::mt19937& gen
 }
 
 static void op_local_search_2opt(std::vector<int>& perm, const std::unordered_map<int,int>& c2n, const VRPInstance& instance) {
-    (void)c2n; // not used currently
-    if (perm.size() < 6) return; // need at least one route with >=3 customers (incl depots => size 5+)
+    if (perm.size() < 4) return;
     const auto& D = instance.distance_matrix;
-    // Identify route boundaries (indices where perm[i]==0). Assume permutation starts & ends with 0.
+    
+    auto get_node_id = [&](int customer_id) {
+        if (customer_id == 0) return 0;
+        return c2n.at(customer_id);
+    };
+
     std::vector<int> delim_idx;
-    for (int i=0;i<(int)perm.size();++i) if (perm[i]==0) delim_idx.push_back(i);
-    if (delim_idx.size()<2) return;
-    // For each consecutive delimiter pair perform 2-opt
-    for (size_t r=0; r+1<delim_idx.size(); ++r) {
+    for (size_t i = 0; i < perm.size(); ++i) {
+        if (perm[i] == 0) {
+            delim_idx.push_back(i);
+        }
+    }
+    if (delim_idx.size() < 2) return;
+
+    for (size_t r = 0; r + 1 < delim_idx.size(); ++r) {
         int start = delim_idx[r];
-        int end = delim_idx[r+1]; // inclusive position of next 0
-        int route_len = end - start + 1; // includes both depots
-        if (route_len <= 4) continue; // need at least 2 non-depot nodes to benefit
+        int end = delim_idx[r+1];
+        if (end - start < 3) continue;
+
         bool improved = true;
-        int max_pass = 50; // safeguard
-        while (improved && max_pass--) {
+        while (improved) {
             improved = false;
-            // i is first node index inside route (excluding starting depot) in global perm
-            for (int i = start + 1; i < end - 2; ++i) {
-                if (perm[i]==0) break; // safety: shouldn't encounter zero before end
-                for (int j = i + 1; j < end - 1; ++j) {
-                    if (perm[j]==0) continue; // skip if delimiter (shouldn't happen except end-1?)
-                    int a = perm[i-1];
-                    int b = perm[i];
-                    int c = perm[j];
-                    int d = perm[j+1]; // j+1 <= end
-                    if (d==0 && c==0) continue; // skip invalid
-                    double delta = D[a][c] + D[b][d] - D[a][b] - D[c][d];
-                    if (delta < -1e-9) {
-                        // reverse segment [i, j]
-                        std::reverse(perm.begin()+i, perm.begin()+j+1);
+            for (int i = start + 1; i < end; ++i) {
+                for (int j = i + 1; j < end; ++j) {
+                    int u1 = perm[i-1], v1 = perm[i];
+                    int u2 = perm[j], v2 = perm[j+1];
+
+                    int n_u1 = get_node_id(u1);
+                    int n_v1 = get_node_id(v1);
+                    int n_u2 = get_node_id(u2);
+                    int n_v2 = get_node_id(v2);
+
+                    if (D.at(n_u1).at(n_v1) + D.at(n_u2).at(n_v2) > D.at(n_u1).at(n_u2) + D.at(n_v1).at(n_v2) + 1e-9) {
+                        std::reverse(perm.begin() + i, perm.begin() + j + 1);
                         improved = true;
                     }
                 }
             }
         }
+    }
+}
+
+static void group_lockers(std::vector<int>& perm, std::unordered_map<int, int>& c2n, const VRPInstance& instance) {
+    if (instance.lockers.empty()) return;
+
+    for (size_t i = 1; i < perm.size() - 1; ++i) {
+        int prev_cust_id = perm[i-1];
+        int curr_cust_id = perm[i];
+        int next_cust_id = perm[i+1];
+
+        if (prev_cust_id == 0 || curr_cust_id == 0 || next_cust_id == 0) continue;
+
+        int prev_node = c2n.at(prev_cust_id);
+        int curr_node = c2n.at(curr_cust_id);
+        int next_node = c2n.at(next_cust_id);
+
+        bool prev_is_locker = prev_node > instance.num_customers;
+        bool curr_is_home = curr_node <= instance.num_customers;
+        bool next_is_locker = next_node > instance.num_customers;
+
+        if (prev_is_locker && curr_is_home && next_is_locker && prev_node == next_node) {
+            const auto& customer = instance.customers[curr_cust_id - 1];
+
+            if (customer->customer_type == 3) { // Flexible customer
+                c2n[curr_cust_id] = prev_node;
+            } else {
+                std::swap(perm[i], perm[i+1]);
+            }
+        }
+    }
+}
+
+static void apply_full_local_search(std::vector<int>& perm, std::unordered_map<int, int>& c2n, const VRPInstance& instance, std::mt19937& gen, int intensity) {
+    for (int i = 0; i < intensity; ++i) {
+        int n = perm.size();
+        if (n < 2) return;
+        std::uniform_real_distribution<> prob(0.0, 1.0);
+        std::uniform_int_distribution<> idx_dist(0, n - 1);
+
+        double r = prob(gen);
+        if (r < 0.33) {
+            int i = idx_dist(gen);
+            int j = idx_dist(gen);
+            if (i != j) std::swap(perm[i], perm[j]);
+        } else if (r < 0.66) {
+            int i = idx_dist(gen);
+            int j = idx_dist(gen);
+            if (i != j) {
+                int val = perm[i];
+                perm.erase(perm.begin() + i);
+                perm.insert(perm.begin() + j, val);
+            }
+        }
+        op_local_search_2opt(perm, c2n, instance);
     }
 }
 
@@ -257,8 +318,9 @@ static Solution iterate(const VRPInstance& instance, std::vector<int> seed_perm,
                 // }
                 bool do_crossover = ur(gen) < params.c_rate;
                 std::vector<int> trial = do_crossover ? op_crossover_pmx(pop[i], global_best, gen) : pop[i].perm;
-                // Attractiveness / randomization placeholder (beta,gamma) could perturb trial here
-                op_local_search_2opt(trial, pop[i].c2n, instance);
+                
+                apply_full_local_search(trial, pop[i].c2n, instance, gen, params.ls_intensity);
+
                 if (ur(gen) < params.m_rate) op_mutation(trial, params.m_rate, gen);
                 Firefly candidate = pop[i];
                 candidate.perm = std::move(trial);
@@ -289,6 +351,9 @@ Solution FA::solve(const VRPInstance& instance, const YAML::Node& params_node, b
     params.c_rate = params_node["c_rate"].as<double>();
     params.beta = params_node["beta"].as<double>();
     params.gamma = params_node["gamma"].as<double>();
+    if (params_node["ls_intensity"]) {
+        params.ls_intensity = params_node["ls_intensity"].as<int>();
+    }
 
     int n = instance.num_customers;
         

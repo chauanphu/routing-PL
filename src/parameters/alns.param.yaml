@@ -1,14 +1,18 @@
 small:
   params:
-    iterations: 100000
-    p: 0.1                   # type-III assignment probability
+    iterations: 100
+    p: 0.5                   # type-III assignment probability
     w_decay: 0.8             # reaction factor for adaptive weights
     reward_1: 5.0
-    reward_2: 5.0
-    reward_3: 1.0 # operator rewards
-    init_temp: 100.0        # initial temperature
-    cooling: 0.9999       # geometric cooling factor per iteration
-    min_temp: 1e-3
+    reward_2: 3.0
+    reward_3: 1.0            # operator rewards
+    init_temp: 100.0         # initial temperature
+    cooling: 0.997         # geometric cooling factor per iteration
+    min_temp: 0.01    # Local search parameters
+    enable_locker_grouping: true
+    enable_sa_moves: true
+    local_search_frequency: 1
+    min_local_moves: 3000
 medium:
   params:
     iterations: 1000          # hard cap on iterations
@@ -17,10 +21,15 @@ medium:
     w_decay: 0.8             # reaction factor for adaptive weights
     reward_1: 5.0
     reward_2: 2.0
-    reward_3: 1.0 # operator rewards
-    init_temp: 100.0        # initial temperature
-    cooling: 0.995         # geometric cooling factor per iteration
+    reward_3: 1.0            # operator rewards
+    init_temp: 100.0         # initial temperature
+    cooling: 0.995           # geometric cooling factor per iteration
     p: 0.3                   # type-III assignment probability
+    # Local search parameters
+    enable_locker_grouping: true
+    enable_sa_moves: true
+    local_search_frequency: 1
+    min_local_moves: 8
 large:
   params:
     iterations: 1000          # hard cap on iterations
@@ -29,7 +38,12 @@ large:
     w_decay: 0.8             # reaction factor for adaptive weights
     reward_1: 5.0
     reward_2: 2.0
-    reward_3: 1.0 # operator rewards
-    init_temp: 100.0        # initial temperature
-    cooling: 0.995         # geometric cooling factor per iteration
+    reward_3: 1.0            # operator rewards
+    init_temp: 100.0         # initial temperature
+    cooling: 0.995           # geometric cooling factor per iteration
     p: 0.1                   # type-III assignment probability
+    # Local search parameters
+    enable_locker_grouping: true
+    enable_sa_moves: true
+    local_search_frequency: 2
+    min_local_moves: 10
