@@ -1,49 +1,56 @@
-small:
+large:
+  data_dir: data/100
+  num_runs: 1
+  output_csv: /tmp/bao_temp_output.csv
   params:
-    iterations: 100
-    p: 0.5                   # type-III assignment probability
-    w_decay: 0.8             # reaction factor for adaptive weights
+    cooling: 0.9953716514215184
+    destroy_ops: 0
+    enable_locker_grouping: true
+    enable_sa_moves: true
+    init_temp: 392.04859013365706
+    iterations: 1000
+    local_search_frequency: 10
+    min_local_moves: 2000
+    p: 0.1
+    repair_ops: 0
+    reward_1: 5.0
+    reward_2: 2.0
+    reward_3: 1.0
+    w_decay: 0.41923261341300644
+medium:
+  data_dir: data/50
+  num_runs: 1
+  output_csv: /tmp/bao_temp_output.csv
+  params:
+    cooling: 0.9953716514215184
+    destroy_ops: 0
+    enable_locker_grouping: true
+    enable_sa_moves: true
+    init_temp: 392.04859013365706
+    iterations: 1000
+    local_search_frequency: 10
+    min_local_moves: 500
+    p: 0.3
+    repair_ops: 0
+    reward_1: 5.0
+    reward_2: 2.0
+    reward_3: 1.0
+    w_decay: 0.41923261341300644
+small:
+  data_dir: data/25
+  num_runs: 1
+  output_csv: /tmp/bao_temp_output.csv
+  params:
+    cooling: 0.99
+    enable_locker_grouping: true
+    enable_sa_moves: true
+    init_temp: 10.0
+    iterations: 500
+    local_search_frequency: 1
+    min_local_moves: 500
+    min_temp: 0.01
+    p: 0.5
     reward_1: 5.0
     reward_2: 3.0
-    reward_3: 1.0            # operator rewards
-    init_temp: 100.0         # initial temperature
-    cooling: 0.997         # geometric cooling factor per iteration
-    min_temp: 0.01    # Local search parameters
-    enable_locker_grouping: true
-    enable_sa_moves: true
-    local_search_frequency: 1
-    min_local_moves: 3000
-medium:
-  params:
-    iterations: 1000          # hard cap on iterations
-    destroy_ops: 0           # (unused yet) explicit counts if needed
-    repair_ops: 0
-    w_decay: 0.8             # reaction factor for adaptive weights
-    reward_1: 5.0
-    reward_2: 2.0
-    reward_3: 1.0            # operator rewards
-    init_temp: 100.0         # initial temperature
-    cooling: 0.995           # geometric cooling factor per iteration
-    p: 0.3                   # type-III assignment probability
-    # Local search parameters
-    enable_locker_grouping: true
-    enable_sa_moves: true
-    local_search_frequency: 1
-    min_local_moves: 8
-large:
-  params:
-    iterations: 1000          # hard cap on iterations
-    destroy_ops: 0           # (unused yet) explicit counts if needed
-    repair_ops: 0
-    w_decay: 0.8             # reaction factor for adaptive weights
-    reward_1: 5.0
-    reward_2: 2.0
-    reward_3: 1.0            # operator rewards
-    init_temp: 100.0         # initial temperature
-    cooling: 0.995           # geometric cooling factor per iteration
-    p: 0.1                   # type-III assignment probability
-    # Local search parameters
-    enable_locker_grouping: true
-    enable_sa_moves: true
-    local_search_frequency: 2
-    min_local_moves: 10
+    reward_3: 1.0
+    w_decay: 0.95

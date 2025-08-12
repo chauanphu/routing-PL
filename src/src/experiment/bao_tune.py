@@ -5,7 +5,6 @@ Bayesian Optimization Tuning Script for VRPPL Solvers
 import argparse
 import yaml
 import subprocess
-import os
 import json
 from pathlib import Path
 from skopt import gp_minimize
@@ -13,10 +12,12 @@ from skopt.space import Real, Integer, Categorical
 from skopt.utils import use_named_args
 
 # --- Helper functions ---
-def load_tune_config(tune_file):
+def load_tune_config(tune_file, size):
     with open(tune_file, 'r') as f:
         config = yaml.safe_load(f)
-    return config['parameters']
+    if size not in config:
+        raise ValueError(f"Size '{size}' not found in tune file {tune_file}")
+    return config[size]
 
 def build_search_space(param_grid):
     space = []
@@ -25,6 +26,8 @@ def build_search_space(param_grid):
         if v.get('tune', True) is False:
             continue
         param_names.append(k)
+        if len(v['range']) == 0:
+            continue
         if v['type'] == 'int':
             if isinstance(v['range'], list) and len(v['range']) > 2:
                 space.append(Categorical(v['range'], name=k))
@@ -47,6 +50,9 @@ def update_param_file(param_file_path, params, base_param_grid, instance_dir, si
         config[size]['params'] = {}
     for k, v in base_param_grid.items():
         def to_scalar(val):
+            # Convert numpy types to native python types
+            if hasattr(val, 'item'):
+                val = val.item()
             if isinstance(val, list):
                 return val[0] if len(val) == 1 else val
             return val
@@ -76,18 +82,19 @@ def run_solver(solver, param_file, instance_file, test_exec, size):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
         if result.returncode != 0:
             print(f"Solver failed: {result.stderr}")
-            return float('inf')
+            return float('inf'), float('inf')
         import re
         for line in result.stdout.splitlines():
             m = re.search(r"Obj = ([0-9.eE+-]+), Vehicles = (\d+), Time = ([0-9.eE+-]+)s", line)
             if m:
                 obj = float(m.group(1))
-                return obj
+                time = float(m.group(3))
+                return obj, time
         print("Could not parse solver output:\n", result.stdout)
-        return float('inf')
+        return float('inf'), float('inf')
     except Exception as e:
         print(f"Error running solver: {e}")
-        return float('inf')
+        return float('inf'), float('inf')
 
 def main():
     parser = argparse.ArgumentParser(description="Bayesian Optimization Tuning for VRPPL Solvers")
@@ -98,16 +105,18 @@ def main():
     parser.add_argument('--size', type=str, default='small', help='Experiment size (small, medium, large)')
     parser.add_argument('--n-calls', type=int, default=30, help='Number of BO iterations')
     parser.add_argument('--output', type=str, default='bao_tuning_result.json', help='Output file for best params')
+    parser.add_argument('--runtime-weight', type=float, default=0.1, help='Weight for runtime in the objective function')
     parser.add_argument('--test-exec', type=str, default='../../build/test', help='Path to compiled test executable')
     args = parser.parse_args()
 
-    param_grid = load_tune_config(args.tune_file)
+    param_grid = load_tune_config(args.tune_file, args.size)
     space, param_names = build_search_space(param_grid)
     instance_dir = Path(args.instance_dir)
     test_exec = Path(args.test_exec)
     size = args.size
     output_csv = '/tmp/bao_temp_output.csv'
     param_file_path = args.param_file
+    runtime_weight = args.runtime_weight
 
     # Use first instance in dir for tuning
     instance_files = sorted([f for f in instance_dir.iterdir() if f.is_file()])
@@ -120,9 +129,15 @@ def main():
     def objective(**params):
         print(f"Testing params: {params}")
         update_param_file(param_file_path, params, param_grid, instance_dir, size, output_csv)
-        obj = run_solver(args.solver, param_file_path, instance_file, test_exec, size)
-        print(f"Objective value: {obj}")
-        return obj
+        obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size)
+        
+        # Combine objective value and runtime into a single score
+        # The weight determines how much to penalize runtime.
+        # A higher weight means runtime is more important.
+        score = obj + runtime_weight * time
+        
+        print(f"Objective value: {obj}, Time: {time}s, Combined score: {score}")
+        return score
 
     res = gp_minimize(objective, space, n_calls=args.n_calls, random_state=42, verbose=True)
     best_params = dict(zip(param_names, res.x))

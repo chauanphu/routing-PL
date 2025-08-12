@@ -24,7 +24,7 @@ struct ALNSParams {
     bool enable_locker_grouping = true; // enable locker grouping local search
     bool enable_sa_moves = true;        // enable SA-style neighborhood moves
     int local_search_frequency = 1;    // apply local search every N iterations
-    int min_local_moves = 10;           // maximum SA-style moves per local search
+    int min_local_moves = 10;           // maximum SA-style moves perlocal  search
 };
 
 struct OperatorScore { double weight=1.0; double score=0.0; int usage=0; };
