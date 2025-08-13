@@ -10,6 +10,19 @@ from pathlib import Path
 from skopt import gp_minimize
 from skopt.space import Real, Integer, Categorical
 from skopt.utils import use_named_args
+import numpy as np
+
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        return super(CustomEncoder, self).default(obj)
 
 # --- Helper functions ---
 def load_tune_config(tune_file, size):
@@ -25,9 +38,10 @@ def build_search_space(param_grid):
     for k, v in param_grid.items():
         if v.get('tune', True) is False:
             continue
-        param_names.append(k)
         if len(v['range']) == 0:
             continue
+        # Only add to param_names if we actually add to space
+        param_names.append(k)
         if v['type'] == 'int':
             if isinstance(v['range'], list) and len(v['range']) > 2:
                 space.append(Categorical(v['range'], name=k))
@@ -74,27 +88,31 @@ def run_solver(solver, param_file, instance_file, test_exec, size):
         '--solver', solver,
         '--params', param_file,
         '--size', size,
-        '--instance-file', str(instance_file),
+        '--instances', str(instance_file.parent),
         '--verbose', '1',
         '--output', '/tmp/bao_temp_output.csv'
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=800)  # Reduced timeout to 800 seconds
         if result.returncode != 0:
             print(f"Solver failed: {result.stderr}")
-            return float('inf'), float('inf')
+            return 1e9, 1e9
         import re
-        for line in result.stdout.splitlines():
-            m = re.search(r"Obj = ([0-9.eE+-]+), Vehicles = (\d+), Time = ([0-9.eE+-]+)s", line)
-            if m:
-                obj = float(m.group(1))
-                time = float(m.group(3))
-                return obj, time
-        print("Could not parse solver output:\n", result.stdout)
-        return float('inf'), float('inf')
+        # Parse for the specific instance we're interested in
+        instance_name = instance_file.name
+        lines = result.stdout.splitlines()
+        for i, line in enumerate(lines):
+            if instance_name in line and "Run 1:" in line:
+                m = re.search(r"Obj = ([0-9.eE+-]+), Vehicles = (\d+), Time = ([0-9.eE+-]+)s", line)
+                if m:
+                    obj = float(m.group(1))
+                    time = float(m.group(3))
+                    return obj, time
+        print("Could not parse solver output for instance", instance_name)
+        return 1e9, 1e9
     except Exception as e:
         print(f"Error running solver: {e}")
-        return float('inf'), float('inf')
+        return 1e9, 1e9
 
 def main():
     parser = argparse.ArgumentParser(description="Bayesian Optimization Tuning for VRPPL Solvers")
@@ -104,9 +122,11 @@ def main():
     parser.add_argument('--instance-dir', type=str, required=True, help='Directory containing instances')
     parser.add_argument('--size', type=str, default='small', help='Experiment size (small, medium, large)')
     parser.add_argument('--n-calls', type=int, default=30, help='Number of BO iterations')
+    parser.add_argument('--n-samples', type=int, default=3, help='Number of instances to sample for evaluation')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed for instance sampling')
     parser.add_argument('--output', type=str, default='bao_tuning_result.json', help='Output file for best params')
     parser.add_argument('--runtime-weight', type=float, default=0.1, help='Weight for runtime in the objective function')
-    parser.add_argument('--test-exec', type=str, default='../../build/test', help='Path to compiled test executable')
+    parser.add_argument('--test-exec', type=str, default='../../build/main', help='Path to compiled test executable')
     args = parser.parse_args()
 
     param_grid = load_tune_config(args.tune_file, args.size)
@@ -118,33 +138,60 @@ def main():
     param_file_path = args.param_file
     runtime_weight = args.runtime_weight
 
-    # Use first instance in dir for tuning
-    instance_files = sorted([f for f in instance_dir.iterdir() if f.is_file()])
-    if not instance_files:
+    # Sample instances for tuning
+    all_instance_files = sorted([f for f in instance_dir.iterdir() if f.is_file()])
+    if not all_instance_files:
         print(f"No instance files found in {instance_dir}")
         exit(1)
-    instance_file = instance_files[0]
+    
+    import random
+    random.seed(args.seed)
+    if args.n_samples > 0 and args.n_samples < len(all_instance_files):
+        instance_files = random.sample(all_instance_files, args.n_samples)
+    else:
+        instance_files = all_instance_files
+    
+    print(f"Using {len(instance_files)} instances for evaluation:")
+    for f in instance_files:
+        print(f"  - {f.name}")
 
     @use_named_args(space)
     def objective(**params):
         print(f"Testing params: {params}")
         update_param_file(param_file_path, params, param_grid, instance_dir, size, output_csv)
-        obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size)
         
-        # Combine objective value and runtime into a single score
-        # The weight determines how much to penalize runtime.
-        # A higher weight means runtime is more important.
-        score = obj + runtime_weight * time
+        total_obj = 0
+        total_time = 0
+        success_count = 0
         
-        print(f"Objective value: {obj}, Time: {time}s, Combined score: {score}")
+        for instance_file in instance_files:
+            obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size)
+            if obj != 1e9:
+                total_obj += obj
+                total_time += time
+                success_count += 1
+        
+        if success_count == 0:
+            print("All solver runs failed for this parameter set.")
+            return 1e9
+
+        avg_obj = total_obj / success_count
+        avg_time = total_time / success_count
+        
+        score = avg_obj + runtime_weight * avg_time
+        
+        print(f"Avg Objective: {avg_obj:.2f}, Avg Time: {avg_time:.2f}s, Combined score: {score:.2f}")
         return score
 
-    res = gp_minimize(objective, space, n_calls=args.n_calls, random_state=42, verbose=True)
-    best_params = dict(zip(param_names, res.x))
+    res = gp_minimize(objective, space, n_calls=args.n_calls, random_state=args.seed, verbose=True)
+    
+    # Convert numpy types to native python types for JSON serialization
+    best_params = {param_names[i]: res.x[i] for i in range(len(param_names))}
+    
     print(f"Best params: {best_params}")
     print(f"Best objective: {res.fun}")
     with open(args.output, 'w') as f:
-        json.dump({'best_params': best_params, 'best_objective': res.fun}, f, indent=2)
+        json.dump({'best_params': best_params, 'best_objective': res.fun}, f, indent=2, cls=CustomEncoder)
 
 if __name__ == '__main__':
     main()

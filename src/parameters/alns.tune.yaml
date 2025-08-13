@@ -29,8 +29,8 @@ small:
     default: 1
   min_local_moves:
     type: int
-    range: [100, 300, 500, 1000, 2000]
-    default: 100
+    range: [500, 1000, 2000, 3000, 5000]
+    default: 1000
 medium:
   iterations:
     type: int
@@ -95,5 +95,5 @@ large:
     default: 1
   min_local_moves:
     type: int
-    range: [2000, 3000, 5000, 10000, 20000, 30000]
+    range: [5000, 10000, 20000, 30000, 50000, 100000]
     default: 5000
