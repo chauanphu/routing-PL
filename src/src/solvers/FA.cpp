@@ -21,8 +21,6 @@ struct FAParams {
     int i_max;
     double c_rate; // Crossover rate
     double m_rate; // Mutation rate
-    double beta; // Actractiveness coeff
-    double gamma; // Light absoprtion rate
     double p = 0.5; // for type-III assignment
     int ls_intensity = 1;
 };
@@ -349,8 +347,6 @@ Solution FA::solve(const VRPInstance& instance, const YAML::Node& params_node, b
     params.pop_size = params_node["pop_size"].as<int>();
     params.m_rate = params_node["m_rate"].as<double>();
     params.c_rate = params_node["c_rate"].as<double>();
-    params.beta = params_node["beta"].as<double>();
-    params.gamma = params_node["gamma"].as<double>();
     if (params_node["ls_intensity"]) {
         params.ls_intensity = params_node["ls_intensity"].as<int>();
     }

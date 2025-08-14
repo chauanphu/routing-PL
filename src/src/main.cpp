@@ -189,7 +189,7 @@ void run_experiment(const ExperimentParams& params, const std::vector<std::strin
                 best_distance = sol.objective_value;
                 best_num_vehicles = sol.routes.size();
             }
-            std::cout << "  Run " << (run + 1) << ": Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
+            std::cout << "  Run " << (run + 1) << "/" << params.num_runs << ": Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
         }
 
         double avg_dist = 0, std_dist = 0, avg_runtime = 0, std_runtime = 0;

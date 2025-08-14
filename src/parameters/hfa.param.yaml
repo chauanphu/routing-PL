@@ -1,44 +1,47 @@
-small:
-  data_dir: ../data/25
+large:
+  beta: 1.0
+  c_rate: 0.95
+  data_dir: data/100
+  gamma: 0.5
+  i_max: 500
+  ls_intensity: 3
+  m_rate: 0.1
+  num_runs: 1
+  output_csv: /tmp/bao_temp_output.csv
+  p: 0.1
   params:
-    i_max: 50
-    pop_size: 100
-    c_rate: 0.95
-    m_rate: 0.1
-    beta: 1.0
-    gamma: 0.5
-    p: 0.5
-    ls_intensity: 10
+    c_rate: 0.7627373502318541
+    i_max: 300
+    ls_intensity: 150
+    m_rate: 0.5774801263571897
+    pop_size: 300
+  pop_size: 2000
 medium:
-  data_dir: ../data/50
+  beta: 1.0
+  c_rate: 0.95
+  data_dir: data/50
+  gamma: 0.5
+  i_max: 200
+  ls_intensity: 2
+  m_rate: 0.1
+  num_runs: 1
+  output_csv: /tmp/bao_temp_output.csv
+  p: 0.1
   params:
-    i_max: 200
-    pop_size: 1000
-    c_rate: 0.95
-    m_rate: 0.1
-    beta: 1.0
-    gamma: 0.5
-    p: 0.1
-    ls_intensity: 2
-large:
-  data_dir: ../data/100
+    c_rate: 0.7627373502318541
+    i_max: 150
+    ls_intensity: 70
+    m_rate: 0.5774801263571897
+    p: 0.3
+    pop_size: 200
+small:
+  data_dir: data/25
+  num_runs: 1
+  output_csv: /tmp/bao_temp_output.csv
   params:
-    i_max: 500
-    pop_size: 2000
-    c_rate: 0.95
-    m_rate: 0.1
-    beta: 1.0
-    gamma: 0.5
-    p: 0.1
-    ls_intensity: 3
-
-large:
-  data_dir: ../data/100
-  params:
+    c_rate: 0.1060063594367598
     i_max: 50
-    pop_size: 1000
-    c_rate: 0.95
-    m_rate: 0.1
-    beta: 1.0
-    gamma: 0.5
-    p: 0.1
+    ls_intensity: 10
+    m_rate: 0.11844994003313261
+    p: 0.5
+    pop_size: 100

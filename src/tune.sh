@@ -3,10 +3,11 @@
 # Script to run Bayesian optimization for ALNS solver for different data sizes.
 
 SOLVER="alns"
-TUNE_FILE="parameters/alns.tune.yaml"
-PARAM_FILE="parameters/alns.param.yaml"
+TUNE_FILE="parameters/${SOLVER}.tune.yaml"
+PARAM_FILE="parameters/${SOLVER}.param.yaml"
+OUTPUT_FILE="output/tuning/${SOLVER}_best_params.json"
 TEST_EXEC="build/test"
-N_CALLS=50 # A reasonable number for BO
+N_CALLS=30 # A reasonable number for BO
 
 # # Small
 # echo "--- Tuning for small instances (data/25) ---"
@@ -18,7 +19,7 @@ N_CALLS=50 # A reasonable number for BO
 #     --instance-dir data/25 \
 #     --size small \
 #     --n-calls $N_CALLS \
-#     --output output/tuning/alns_small_best_params.json \
+#     --output $OUTPUT_FILE \
 #     --test-exec $TEST_EXEC
 
 # # Medium
@@ -27,11 +28,11 @@ N_CALLS=50 # A reasonable number for BO
 #     --solver $SOLVER \
 #     --tune-file $TUNE_FILE \
 #     --param-file $PARAM_FILE \
-#     --runtime-weight 0.5 \
+#     --runtime-weight 0.07 \
 #     --instance-dir data/50 \
 #     --size medium \
 #     --n-calls $N_CALLS \
-#     --output output/tuning/alns_medium_best_params.json \
+#     --output $OUTPUT_FILE \
 #     --test-exec $TEST_EXEC
 
 # Large
@@ -40,11 +41,11 @@ uv run src/experiment/bao_tune.py \
     --solver $SOLVER \
     --tune-file $TUNE_FILE \
     --param-file $PARAM_FILE \
-    --runtime-weight 1.0 \
+    --runtime-weight 0.07 \
     --instance-dir data/100 \
     --size large \
     --n-calls $N_CALLS \
-    --output output/tuning/alns_large_best_params.json \
+    --output output/tuning/alns.large.json \
     --test-exec $TEST_EXEC
 
 echo "--- ALNS tuning complete ---"

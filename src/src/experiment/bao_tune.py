@@ -83,17 +83,17 @@ def update_param_file(param_file_path, params, base_param_grid, instance_dir, si
         yaml.dump(config, f, default_flow_style=False)
 
 def run_solver(solver, param_file, instance_file, test_exec, size):
-    cmd = [
-        str(test_exec),
-        '--solver', solver,
-        '--params', param_file,
-        '--size', size,
-        '--instances', str(instance_file.parent),
-        '--verbose', '1',
-        '--output', '/tmp/bao_temp_output.csv'
-    ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=800)  # Reduced timeout to 800 seconds
+        cmd = [
+            str(test_exec),
+            '--solver', solver,
+            '--params', param_file,
+            '--size', size,
+            '--instances', str(instance_file.parent),
+            '--verbose', '1',
+            '--output', '/tmp/bao_temp_output.csv'
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1100)  # Reduced timeout to 1100 seconds
         if result.returncode != 0:
             print(f"Solver failed: {result.stderr}")
             return 1e9, 1e9
@@ -101,14 +101,14 @@ def run_solver(solver, param_file, instance_file, test_exec, size):
         # Parse for the specific instance we're interested in
         instance_name = instance_file.name
         lines = result.stdout.splitlines()
-        for i, line in enumerate(lines):
-            if instance_name in line and "Run 1:" in line:
-                m = re.search(r"Obj = ([0-9.eE+-]+), Vehicles = (\d+), Time = ([0-9.eE+-]+)s", line)
-                if m:
-                    obj = float(m.group(1))
-                    time = float(m.group(3))
-                    return obj, time
-        print("Could not parse solver output for instance", instance_name)
+        for line in lines:
+            # Match lines like '  Obj = 496.513, Vehicles = 7, Time = 12.4854s'
+            m = re.search(r"Obj = ([0-9.eE+-]+), Vehicles = (\d+), Time = ([0-9.eE+-]+)s", line)
+            if m:
+                obj = float(m.group(1))
+                time = float(m.group(3))
+                return obj, time
+        print(f"Could not parse solver output for instance {instance_name}")
         return 1e9, 1e9
     except Exception as e:
         print(f"Error running solver: {e}")
@@ -159,27 +159,29 @@ def main():
     def objective(**params):
         print(f"Testing params: {params}")
         update_param_file(param_file_path, params, param_grid, instance_dir, size, output_csv)
-        
+
         total_obj = 0
         total_time = 0
         success_count = 0
-        
+
         for instance_file in instance_files:
             obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size)
-            if obj != 1e9:
-                total_obj += obj
-                total_time += time
-                success_count += 1
-        
+            if obj == 1e9:
+                print(f"Sample {instance_file.name} infeasible or timeout. Setting objective to 1e9 for this iteration.")
+                return 1e9
+            total_obj += obj
+            total_time += time
+            success_count += 1
+
         if success_count == 0:
             print("All solver runs failed for this parameter set.")
             return 1e9
 
         avg_obj = total_obj / success_count
         avg_time = total_time / success_count
-        
+
         score = avg_obj + runtime_weight * avg_time
-        
+
         print(f"Avg Objective: {avg_obj:.2f}, Avg Time: {avg_time:.2f}s, Combined score: {score:.2f}")
         return score
 
