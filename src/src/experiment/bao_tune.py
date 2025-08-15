@@ -82,7 +82,7 @@ def update_param_file(param_file_path, params, base_param_grid, instance_dir, si
     with open(param_file_path, 'w') as f:
         yaml.dump(config, f, default_flow_style=False)
 
-def run_solver(solver, param_file, instance_file, test_exec, size):
+def run_solver(solver, param_file, instance_file, test_exec, size, timeout):
     try:
         cmd = [
             str(test_exec),
@@ -93,7 +93,7 @@ def run_solver(solver, param_file, instance_file, test_exec, size):
             '--verbose', '1',
             '--output', '/tmp/bao_temp_output.csv'
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1100)  # Reduced timeout to 1100 seconds
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # Reduced timeout to 1100 seconds
         if result.returncode != 0:
             print(f"Solver failed: {result.stderr}")
             return 1e9, 1e9
@@ -127,6 +127,7 @@ def main():
     parser.add_argument('--output', type=str, default='bao_tuning_result.json', help='Output file for best params')
     parser.add_argument('--runtime-weight', type=float, default=0.1, help='Weight for runtime in the objective function')
     parser.add_argument('--test-exec', type=str, default='../../build/main', help='Path to compiled test executable')
+    parser.add_argument('--timeout', type=int, default=1100, help='Timeout for solver execution')
     args = parser.parse_args()
 
     param_grid = load_tune_config(args.tune_file, args.size)
@@ -165,7 +166,7 @@ def main():
         success_count = 0
 
         for instance_file in instance_files:
-            obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size)
+            obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size, args.timeout)
             if obj == 1e9:
                 print(f"Sample {instance_file.name} infeasible or timeout. Setting objective to 1e9 for this iteration.")
                 return 1e9
