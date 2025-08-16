@@ -16,7 +16,6 @@ namespace {
 struct HHOParams {
     int max_iter = 200; // T: maximum number of iterations
     int population_size = 100; // N: population size  
-    int num_hawks = 10; // Number of hawks
     int num_iterations = 30; // Number of iterations per stage
     double p = 0.5; // for type-III locker assignment
     double lower_bound = 0.0; // LB: Lower bound for escaping energy
@@ -322,7 +321,6 @@ Solution HHO::solve(const VRPInstance& instance, const YAML::Node& params_node, 
     params.p = params_node["p"].as<double>();
     
     // Optional parameters with defaults
-    if (params_node["num_hawks"]) params.num_hawks = params_node["num_hawks"].as<int>();
     if (params_node["num_iterations"]) params.num_iterations = params_node["num_iterations"].as<int>();
     if (params_node["lower_bound"]) params.lower_bound = params_node["lower_bound"].as<double>();
     if (params_node["upper_bound"]) params.upper_bound = params_node["upper_bound"].as<double>();

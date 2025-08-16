@@ -3,40 +3,34 @@ large:
   num_runs: 1
   output_csv: /tmp/bao_temp_output.csv
   params:
-    beta: 1.5927253540027217
-    learning_rate: 0.0045525659203606815
-    lower_bound: 0.015656646227779295
-    max_iter: 7578
-    num_hawks: 25
-    num_iterations: 288
-    p: 0.47066354631751783
-    population_size: 241
-    upper_bound: 1.7634271618924982
+    max_iter: 200
+    population_size: 3400
+    beta: 2.14
+    learning_rate: 0.00081
+    lower_bound: 0.4734
+    upper_bound: 0.7826
+    p: 0.1
 medium:
   data_dir: data/50
   num_runs: 1
   output_csv: /tmp/bao_temp_output.csv
   params:
-    beta: 1.0
-    learning_rate: 0.0001
-    lower_bound: 0.0
-    max_iter: 1000
-    num_hawks: 5
-    num_iterations: 10
-    p: 0.1
+    max_iter: 300
     population_size: 500
-    upper_bound: 2.0
+    beta: 2.5
+    learning_rate: 0.01
+    lower_bound: 0.5
+    p: 0.1
+    upper_bound: 0.5
 small:
   data_dir: data/25
   num_runs: 1
   output_csv: /tmp/bao_temp_output.csv
   params:
+    max_iter: 100
     beta: 2.5
-    learning_rate: 0.0006570633394841245
-    lower_bound: 0.261
-    max_iter: 500
-    num_hawks: 10
-    num_iterations: 50
+    learning_rate: 0.0001
+    lower_bound: 0.5
     p: 0.1
     population_size: 50
     upper_bound: 0.5
