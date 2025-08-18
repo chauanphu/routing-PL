@@ -1,3 +1,4 @@
+instance_name,Num Vehicles,Best Distance,AVG Distance,Std Distance,AVG Runtime (s),Std Runtime (s)
 C101_co_25.txt,3,203.196,203.196,0,5.98503,0
 C102_co_25.txt,3,150.525,150.525,0,5.86292,0
 C101_co_25.txt,3,202.623,206.143,3.37027,5.99574,0.0293509
