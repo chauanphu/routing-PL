@@ -8,7 +8,7 @@
  - `--output <path_to_output_file>`: Path to the output CSV file to store the results.
  - `--num-runs <number_of_runs>`: Number of runs to perform for each parameter setting.
 
-For example: `uv run -m src.experiment.sensitivity --size small --instance-file data/25 --parameters parameters/paco.tune.yaml --output results/sensitivity.csv --num-runs 10`
+For example: `uv run -m src.experiment.sensitivity --size small --instance-file data/25 --parameters parameters/paco.tune.yaml --output results/sensitivity.csv --num-runs 5`
 
 **Run the solver on each instance**
 

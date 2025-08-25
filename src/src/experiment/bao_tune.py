@@ -122,7 +122,7 @@ def main():
     parser.add_argument('--instance-dir', type=str, required=True, help='Directory containing instances')
     parser.add_argument('--size', type=str, default='small', help='Experiment size (small, medium, large)')
     parser.add_argument('--n-calls', type=int, default=30, help='Number of BO iterations')
-    parser.add_argument('--n-samples', type=int, default=3, help='Number of instances to sample for evaluation')
+    parser.add_argument('--n-samples', type=int, default=5, help='Number of instances to sample for evaluation')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for instance sampling')
     parser.add_argument('--output', type=str, default='bao_tuning_result.json', help='Output file for best params')
     parser.add_argument('--runtime-weight', type=float, default=0.1, help='Weight for runtime in the objective function')

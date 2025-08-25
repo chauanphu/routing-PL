@@ -157,7 +157,7 @@ def build_arg_parser():
     p.add_argument('--size', type=str, default='medium', help='Problem instance size label')
     p.add_argument('--instance-file', type=str, help='Path to a single instance file or directory of instances')
     p.add_argument('--instance', type=str, help='(Deprecated) Path to instance directory (kept for backward compatibility)')
-    p.add_argument('--sample-size', type=int, default=0, help='If directory provided, number of instances to sample (0=all)')
+    p.add_argument('--sample-size', type=int, default=5, help='If directory provided, number of instances to sample (0=all)')
     p.add_argument('--seed', type=int, default=None, help='Random seed for sampling')
     p.add_argument('--parameters', type=str, required=True, help='Path to PACO parameters YAML file')
     p.add_argument('--output', type=str, required=True, help='Path to detailed output CSV file')
