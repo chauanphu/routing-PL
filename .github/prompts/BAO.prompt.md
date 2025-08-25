@@ -26,47 +26,47 @@ Based on the instance description in `VRPPL.prompt.md`
 
 ```yaml
 parameters:
-  num_ants:
+  m:
     type: int
-    range: [100, 1000]
-    default: 500
-    step: 100
-  num_iterations:
-    type: int
-    range: [10, 100]
-    default: 50
+    range: [10, 20, 30, 40]
+    default: 30
     step: 10
+  I:
+    type: int
+    range: [5, 10, 15, 20]
+    default: 10
+    step: 5
   alpha:
     type: float
-    range: [0.5, 5.0]
-    default: 1.0
+    range: [0.5, 3.0]
+    default: 1.25
     step: 0.25
   beta:
     type: float
-    range: [1.0, 5.0]
+    range: [0.5, 3.0]
     default: 1.0
     step: 0.25
-  evaporation_rate: # Corresponds to rho in ACOParams
+  rho:
     type: float
-    range: [0.01, 0.5]
-    default: 0.1
+    range: [0.2, 0.7]
+    default: 0.6
     step: 0.1
   Q:
     type: float
-    range: [1.0, 10.0]
-    default: 1.0
-    step: 2.0
-  p:
-    type: float
-    range: []
-    default: 0.1
-    step: 1
-    tune: false # No tuning required, use default value
-  stagnation_limit:
+    range: [0.5, 3.0]
+    default: 2.0
+    step: 0.5
+  t:
     type: int
-    range: [10, 50]
+    range: [10, 100]
     default: 10
     step: 10
+  p:
+    type: int
+    range: [64, 64]
+    default: 64
+    step: 1
+    tune: false
 ```
 
 ## Process
@@ -82,3 +82,14 @@ parameters:
 5. Iteration: You add the new hyperparameter settings and their performance to your history, and you go back to step 2. You update the surrogate model with this new information, and the process repeats.
 
 Termination: You continue this iterative process until you reach a certain budget (e.g., a maximum number of trials) or when the improvement in performance becomes very small.
+
+## Implementation
+1. Write a Python script that implements the Bayesian Optimization process using the `scikit-optimize` library.
+2. The script should read the parameter grid from the `*.tune.yaml` file.
+3. It should define the objective function that evaluates the performance of the solver with the given hyperparameters.
+4. The Python script should execute `build/test` compiled code with specified parameter:
+`Usage: ./test --solver <name> --params <param_file.yaml> [--instances <dir>] [--num-runs <int>] [--output <output_file.csv>] [--size <experiment_size>] [--instance-file <file>] [--verbose <level> | -v <level>`
+5. The script should use the `gp_minimize` function from `scikit-optimize` to perform the optimization.
+6. The script should save the best hyperparameters and their corresponding performance metrics to a file.
+
+**Can refer to `src/experment/analysis.py` for the example of how to run the solver with the given parameters.**

@@ -1,0 +1,20 @@
+2025-05-24 05:25:06,585 INFO [bo_runner] Logging started. Log file: /home/aphuc/ai/workspace/routing-PL/yu-sa/bo_runner.log
+2025-05-24 05:30:19,323 INFO [bo_runner] Logging started. Log file: /home/aphuc/ai/workspace/routing-PL/yu-sa/bo_runner.log
+2025-05-24 05:30:20,591 WARNING Solver failed: terminate called after throwing an instance of 'std::runtime_error'
+  what():  YAML file missing 'parameters' key: /tmp/tmp_b3pl9bn.yaml
+
+2025-05-24 05:30:21,771 WARNING Solver failed: terminate called after throwing an instance of 'std::runtime_error'
+  what():  YAML file missing 'parameters' key: /tmp/tmppn91yp6r.yaml
+
+2025-05-24 05:30:22,957 WARNING Solver failed: terminate called after throwing an instance of 'std::runtime_error'
+  what():  YAML file missing 'parameters' key: /tmp/tmp8wjsxfmg.yaml
+
+2025-05-24 05:30:24,167 WARNING Solver failed: terminate called after throwing an instance of 'std::runtime_error'
+  what():  YAML file missing 'parameters' key: /tmp/tmp8jd40uat.yaml
+
+2025-05-24 05:30:25,404 WARNING Solver failed: terminate called after throwing an instance of 'std::runtime_error'
+  what():  YAML file missing 'parameters' key: /tmp/tmpi5_k8iwi.yaml
+
+2025-05-24 05:30:26,632 WARNING Solver failed: terminate called after throwing an instance of 'std::runtime_error'
+  what():  YAML file missing 'parameters' key: /tmp/tmpw3ycttov.yaml
+
