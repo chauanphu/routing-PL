@@ -2,7 +2,7 @@
 
 # Script to run Bayesian optimization for HFA solver for different data sizes.
 
-SOLVER="hho"
+SOLVER="paco"
 TUNE_FILE="parameters/${SOLVER}.tune.yaml"
 PARAM_FILE="parameters/${SOLVER}.param.yaml"
 OUTPUT_FILE="output/tuning/${SOLVER}_best_params.json"
@@ -26,32 +26,32 @@ N_CALLS=30 # A reasonable number for BO
 
 # # Medium
 # echo "--- Tuning for medium instances (data/50) ---"
-# uv run src/experiment/bao_tune.py \
-#     --solver $SOLVER \
-#     --tune-file $TUNE_FILE \
-#     --param-file $PARAM_FILE \
-#     --runtime-weight 0.07 \
-#     --instance-dir data/50 \
-#     --size medium \
-#     --n-calls $N_CALLS \
-#     --output output/tuning/$SOLVER.medium.json \
-#     --test-exec $TEST_EXEC \
-#     --n-samples 5 \
-#     --timeout 500
-
-# Large
-echo "--- Tuning for large instances (data/100) ---"
 uv run src/experiment/bao_tune.py \
     --solver $SOLVER \
     --tune-file $TUNE_FILE \
     --param-file $PARAM_FILE \
-    --runtime-weight 0.1 \
-    --instance-dir data/100 \
-    --size large \
+    --runtime-weight 0.07 \
+    --instance-dir data/50 \
+    --size medium \
     --n-calls $N_CALLS \
-    --output output/tuning/$SOLVER.large.json \
+    --output output/tuning/$SOLVER.medium.json \
     --test-exec $TEST_EXEC \
-    --n-samples 3 \
-    --timeout 1200
+    --n-samples 5 \
+    --timeout 500
+
+# Large
+# echo "--- Tuning for large instances (data/100) ---"
+# uv run src/experiment/bao_tune.py \
+#     --solver $SOLVER \
+#     --tune-file $TUNE_FILE \
+#     --param-file $PARAM_FILE \
+#     --runtime-weight 0.1 \
+#     --instance-dir data/100 \
+#     --size large \
+#     --n-calls $N_CALLS \
+#     --output output/tuning/$SOLVER.large.json \
+#     --test-exec $TEST_EXEC \
+#     --n-samples 3 \
+#     --timeout 1200
 
 echo "--- HFA tuning complete ---"

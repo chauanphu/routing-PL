@@ -82,5 +82,6 @@
         "ranges": "cpp",
         "csignal": "cpp",
         "regex": "cpp"
-    }
+    },
+    "python-envs.pythonProjects": []
 }
