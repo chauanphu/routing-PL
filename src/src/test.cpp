@@ -19,6 +19,7 @@ struct ExperimentParams {
     std::string data_dir;
     YAML::Node params_node; // A single node to hold solver-specific params
     int verbose = 0;
+    bool full_solution = false; // Output full solution as JSON
 };
 
 ExperimentParams parse_params(int argc, char* argv[]) {
@@ -45,11 +46,13 @@ ExperimentParams parse_params(int argc, char* argv[]) {
             params.instance_file = argv[++i];
         } else if ((key == "--verbose" || key == "-v") && i + 1 < argc) {
             params.verbose = std::stoi(argv[++i]);
+        } else if (key == "--full-solution") {
+            params.full_solution = true;
         }
     }
 
     if (params.solver_name.empty()) {
-        std::cerr << "Usage: ./test --solver <name> [--params <file.yaml>] [--instances <dir>] [--num-runs <int>] [--output <file.csv>] [--size <size>] [--instance-file <file>] [-v <level>]" << std::endl;
+        std::cerr << "Usage: ./test --solver <name> [--params <file.yaml>] [--instances <dir>] [--num-runs <int>] [--output <file.csv>] [--size <size>] [--instance-file <file>] [-v <level>] [--full-solution]" << std::endl;
         exit(1);
     }
 
@@ -178,24 +181,51 @@ int main(int argc, char* argv[]) {
     auto end = std::chrono::high_resolution_clock::now();
     double runtime = std::chrono::duration<double>(end - start).count();
 
-    std::cout << "  Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
-    
-    if (params.verbose > 0) {
-        std::cout << "Customer permutation: ";
-        for (size_t i = 0; i < sol.customer_permutation.size(); ++i) {
-            std::cout << sol.customer_permutation[i];
-            if (i + 1 < sol.customer_permutation.size()) std::cout << ", ";
+    if (params.full_solution) {
+        // Output JSON format for programmatic parsing
+        std::cout << "{" << std::endl;
+        std::cout << "  \"objective\": " << sol.objective_value << "," << std::endl;
+        std::cout << "  \"vehicles\": " << sol.routes.size() << "," << std::endl;
+        std::cout << "  \"runtime\": " << runtime << "," << std::endl;
+        std::cout << "  \"routes\": [" << std::endl;
+        for (size_t i = 0; i < sol.routes.size(); ++i) {
+            std::cout << "    [";
+            for (size_t j = 0; j < sol.routes[i].size(); ++j) {
+                std::cout << sol.routes[i][j];
+                if (j + 1 < sol.routes[i].size()) std::cout << ", ";
+            }
+            std::cout << "]";
+            if (i + 1 < sol.routes.size()) std::cout << ",";
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
+        std::cout << "  ]," << std::endl;
+        std::cout << "  \"delivery_nodes\": [";
+        for (size_t i = 0; i < sol.delivery_nodes.size(); ++i) {
+            std::cout << sol.delivery_nodes[i];
+            if (i + 1 < sol.delivery_nodes.size()) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+        std::cout << "}" << std::endl;
+    } else {
+        std::cout << "  Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;
+        
+        if (params.verbose > 0) {
+            std::cout << "Customer permutation: ";
+            for (size_t i = 0; i < sol.customer_permutation.size(); ++i) {
+                std::cout << sol.customer_permutation[i];
+                if (i + 1 < sol.customer_permutation.size()) std::cout << ", ";
+            }
+            std::cout << std::endl;
 
-        if (params.verbose > 1) {
-            std::cout << "\nRoute details:" << std::endl;
-            for (size_t i = 0; i < sol.routes.size(); ++i) {
-                std::cout << "Route " << i+1 << ":" << std::endl;
-                print_route_distances(instance, sol.routes[i]);
+            if (params.verbose > 1) {
+                std::cout << "\nRoute details:" << std::endl;
+                for (size_t i = 0; i < sol.routes.size(); ++i) {
+                    std::cout << "Route " << i+1 << ":" << std::endl;
+                    print_route_distances(instance, sol.routes[i]);
+                }
             }
         }
+        std::cout << std::endl;
     }
-    std::cout << std::endl;
     return 0;
 }
