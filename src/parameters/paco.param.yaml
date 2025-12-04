@@ -17,15 +17,15 @@ medium:
   num_runs: 1
   output_csv: /tmp/bao_temp_output.csv
   params:
-    I: 10
+    I: 20
     LS: 90
-    Q: 1.0
-    alpha: 0.9566802221499255
-    beta: 0.75
-    m: 35
+    Q: 1.5317898441440245
+    alpha: 0.75
+    beta: 1.5026172217259526
+    m: 55
     p: 64
-    rho: 0.8
-    t: 50
+    rho: 0.2
+    t: 70
 small:
   data_dir: data/25
   num_runs: 1
@@ -33,10 +33,10 @@ small:
   params:
     I: 15
     LS: 50
-    Q: 3.0
-    alpha: 0.75
-    beta: 1.6415472124069617
+    Q: 1.5578701066333343
+    alpha: 1.12
+    beta: 1.43
     m: 3
     p: 64
-    rho: 0.2
-    t: 60
+    rho: 0.7488418448103622
+    t: 50

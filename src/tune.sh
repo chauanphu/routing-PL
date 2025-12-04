@@ -22,7 +22,7 @@ N_CALLS=30 # A reasonable number for BO
 #     --output output/tuning/$SOLVER.small.json \
 #     --test-exec $TEST_EXEC \
 #     --n-samples 5 \
-#     --timeout 100
+#     --timeout 10
 
 # # Medium
 # echo "--- Tuning for medium instances (data/50) ---"
@@ -30,14 +30,14 @@ uv run src/experiment/bao_tune.py \
     --solver $SOLVER \
     --tune-file $TUNE_FILE \
     --param-file $PARAM_FILE \
-    --runtime-weight 0.07 \
+    --runtime-weight 1.0 \
     --instance-dir data/50 \
     --size medium \
     --n-calls $N_CALLS \
     --output output/tuning/$SOLVER.medium.json \
     --test-exec $TEST_EXEC \
     --n-samples 5 \
-    --timeout 500
+    --timeout 100
 
 # Large
 # echo "--- Tuning for large instances (data/100) ---"

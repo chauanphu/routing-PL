@@ -182,12 +182,57 @@ int main(int argc, char* argv[]) {
     double runtime = std::chrono::duration<double>(end - start).count();
 
     if (params.full_solution) {
+        // Build reverse mapping: delivery_node -> list of customers delivered there
+        // But we need to track customer order in routes, so we'll rebuild route info
+        
         // Output JSON format for programmatic parsing
         std::cout << "{" << std::endl;
         std::cout << "  \"objective\": " << sol.objective_value << "," << std::endl;
         std::cout << "  \"vehicles\": " << sol.routes.size() << "," << std::endl;
         std::cout << "  \"runtime\": " << runtime << "," << std::endl;
+        
+        // Output routes with customer(delivery_node) format as strings
         std::cout << "  \"routes\": [" << std::endl;
+        
+        // We need to reconstruct which customer corresponds to each delivery node in routes
+        // Use customer_permutation and customer2node to rebuild this
+        int perm_idx = 0;
+        for (size_t i = 0; i < sol.routes.size(); ++i) {
+            std::cout << "    [";
+            for (size_t j = 0; j < sol.routes[i].size(); ++j) {
+                int node = sol.routes[i][j];
+                if (node == 0) {
+                    // Depot
+                    std::cout << "\"0\"";
+                } else {
+                    // Find the customer(s) delivered to this node at this position
+                    // The customer_permutation tells us the order of customers
+                    if (perm_idx < (int)sol.customer_permutation.size()) {
+                        int cust_id = sol.customer_permutation[perm_idx];
+                        int delivery_node = sol.customer2node.at(cust_id);
+                        // Output format: "customer_id(delivery_node)"
+                        if (cust_id == delivery_node) {
+                            // Home delivery - just show the ID
+                            std::cout << "\"" << cust_id << "\"";
+                        } else {
+                            // Locker delivery - show customer(locker)
+                            std::cout << "\"" << cust_id << "(" << delivery_node << ")\"";
+                        }
+                        perm_idx++;
+                    } else {
+                        std::cout << "\"" << node << "\"";
+                    }
+                }
+                if (j + 1 < sol.routes[i].size()) std::cout << ", ";
+            }
+            std::cout << "]";
+            if (i + 1 < sol.routes.size()) std::cout << ",";
+            std::cout << std::endl;
+        }
+        std::cout << "  ]," << std::endl;
+        
+        // Also output raw routes (just node IDs) for visualization
+        std::cout << "  \"raw_routes\": [" << std::endl;
         for (size_t i = 0; i < sol.routes.size(); ++i) {
             std::cout << "    [";
             for (size_t j = 0; j < sol.routes[i].size(); ++j) {
@@ -199,12 +244,22 @@ int main(int argc, char* argv[]) {
             std::cout << std::endl;
         }
         std::cout << "  ]," << std::endl;
+        
         std::cout << "  \"delivery_nodes\": [";
         for (size_t i = 0; i < sol.delivery_nodes.size(); ++i) {
             std::cout << sol.delivery_nodes[i];
             if (i + 1 < sol.delivery_nodes.size()) std::cout << ", ";
         }
-        std::cout << "]" << std::endl;
+        std::cout << "]," << std::endl;
+        // Output customer2node mapping: customer_id -> delivery_node_id
+        std::cout << "  \"customer2node\": {";
+        bool first = true;
+        for (const auto& [cust_id, node_id] : sol.customer2node) {
+            if (!first) std::cout << ", ";
+            std::cout << "\"" << cust_id << "\": " << node_id;
+            first = false;
+        }
+        std::cout << "}" << std::endl;
         std::cout << "}" << std::endl;
     } else {
         std::cout << "  Obj = " << sol.objective_value << ", Vehicles = " << sol.routes.size() << ", Time = " << runtime << "s" << std::endl;

@@ -96,7 +96,7 @@ def run_solver(solver, param_file, instance_file, test_exec, size, timeout):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # Reduced timeout to 1100 seconds
         if result.returncode != 0:
             print(f"Solver failed: {result.stderr}")
-            return 1e9, 1e9
+            return None, None
         import re
         # Parse for the specific instance we're interested in
         instance_name = instance_file.name
@@ -109,10 +109,10 @@ def run_solver(solver, param_file, instance_file, test_exec, size, timeout):
                 time = float(m.group(3))
                 return obj, time
         print(f"Could not parse solver output for instance {instance_name}")
-        return 1e9, 1e9
+        return None, None
     except Exception as e:
         print(f"Error running solver: {e}")
-        return 1e9, 1e9
+        return None, None
 
 def main():
     parser = argparse.ArgumentParser(description="Bayesian Optimization Tuning for VRPPL Solvers")
@@ -167,23 +167,48 @@ def main():
 
         for instance_file in instance_files:
             obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size, args.timeout)
-            if obj == 1e9:
-                print(f"Sample {instance_file.name} infeasible or timeout. Setting objective to 1e9 for this iteration.")
-                return 1e9
+            if obj is None:
+                print(f"Sample {instance_file.name} infeasible or timeout.")
+                # Dynamic Penalty Strategy:
+                # Avoid the "cliff" of 1e9 which distorts the Gaussian Process.
+                # Instead, use a value worse than the worst valid solution seen so far.
+                if hasattr(objective, 'valid_scores') and objective.valid_scores:
+                    # 1.5x the worst valid score creates a barrier that "mvalid_scoresoves" with the search
+                    penalty = max(objective.valid_scores) * 1.5
+                else:
+                    # Fallback if no valid solutions found yet (heuristic high value)
+                    penalty = 100000.0
+                print(f"  -> Assigning dynamic penalty: {penalty:.2f}")
+                return penalty
+
             total_obj += obj
             total_time += time
             success_count += 1
 
         if success_count == 0:
             print("All solver runs failed for this parameter set.")
-            return 1e9
+            # Same penalty logic for total failure
+            if hasattr(objective, 'valid_scores') and objective.valid_scores:
+                return max(objective.valid_scores) * 1.5
+            return 100000.0
 
         avg_obj = total_obj / success_count
         avg_time = total_time / success_count
+        # Robust Penalty Mechanism:
+        # Penalize runtime as a percentage of the timeout budget.
+        # This scales with the objective value (solving the normalization issue)
+        # and creates a trade-off relative to the allowed time.
+        # Formula: Score = Obj * (1 + weight * (Time / Timeout))
+        time_ratio = avg_time / args.timeout
+        penalty_multiplier = 1.0 + (runtime_weight * time_ratio)
+        score = avg_obj * penalty_multiplier
 
+        print(f"Avg Obj: {avg_obj:.2f}, Avg Time: {avg_time:.2f}s (Ratio: {time_ratio:.2%}), Score: {score:.2f}")
         score = avg_obj + runtime_weight * avg_time
-
-        print(f"Avg Objective: {avg_obj:.2f}, Avg Time: {avg_time:.2f}s, Combined score: {score:.2f}")
+        # Track valid scores for future penalties
+        if not hasattr(objective, 'valid_scores'):
+            objective.valid_scores = []
+        objective.valid_scores.append(score)
         return score
 
     res = gp_minimize(objective, space, n_calls=args.n_calls, random_state=args.seed, verbose=True)

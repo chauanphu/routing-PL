@@ -82,20 +82,20 @@ def plot_instance(instance: VRPInstance, solution: SolverResult = None) -> plt.F
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     
     # Plot routes if solution provided
-    if solution and solution.success and solution.routes:
+    if solution and solution.success and solution.raw_routes:
         # Generate colors for routes
-        route_colors = plt.cm.tab10(np.linspace(0, 1, len(solution.routes)))
+        route_colors = plt.cm.tab10(np.linspace(0, 1, len(solution.raw_routes)))
         
         all_nodes = instance.get_all_nodes()
         
-        for route_idx, route in enumerate(solution.routes):
+        for route_idx, route in enumerate(solution.raw_routes):
             color = route_colors[route_idx]
             
-            # Get coordinates for route nodes
+            # Get coordinates for route nodes (raw_routes contains integer node IDs)
             route_x = []
             route_y = []
             for node_id in route:
-                if 0 <= node_id < len(all_nodes):
+                if isinstance(node_id, int) and 0 <= node_id < len(all_nodes):
                     node = all_nodes[node_id]
                     route_x.append(node.x)
                     route_y.append(node.y)

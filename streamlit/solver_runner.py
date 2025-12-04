@@ -20,7 +20,8 @@ class SolverResult:
     objective: float
     vehicles: int
     runtime: float
-    routes: List[List[int]]
+    routes: List[List[str]]  # Routes with customer(delivery_node) format
+    raw_routes: List[List[int]] = field(default_factory=list)  # Routes with just delivery node IDs
     delivery_nodes: List[int] = field(default_factory=list)
     success: bool = True
     error_message: str = ""
@@ -169,6 +170,7 @@ def run_solver(
             vehicles=data.get("vehicles", 0),
             runtime=data.get("runtime", 0),
             routes=data.get("routes", []),
+            raw_routes=data.get("raw_routes", []),
             delivery_nodes=data.get("delivery_nodes", []),
             success=True,
         )
