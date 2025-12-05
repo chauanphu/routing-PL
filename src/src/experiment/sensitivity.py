@@ -13,13 +13,59 @@ from statistics import mean, stdev
 from .common import load_parameters, run_paco, get_paco_exec
 
 
+def generate_range(param_cfg: dict) -> list:
+    """Generate discrete range values from min, max, steps, and default.
+    
+    If 'range' is explicitly provided, use it directly.
+    Otherwise, calculate from min, max, steps (default 5).
+    For integer types, values are rounded to nearest int.
+    """
+    # If explicit range is provided, use it
+    if 'range' in param_cfg and param_cfg['range']:
+        return param_cfg['range']
+    
+    # If no min/max defined, return empty range (skip this parameter)
+    if 'min' not in param_cfg or 'max' not in param_cfg:
+        return []
+    
+    min_val = param_cfg['min']
+    max_val = param_cfg['max']
+    steps = param_cfg.get('steps', 5)
+    param_type = param_cfg.get('type', 'float')
+    
+    if steps <= 1:
+        return [min_val]
+    
+    # Generate linearly spaced values
+    step_size = (max_val - min_val) / (steps - 1)
+    values = [min_val + i * step_size for i in range(steps)]
+    
+    # Round for integer types
+    if param_type == 'int':
+        values = [round(v) for v in values]
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_values = []
+        for v in values:
+            if v not in seen:
+                seen.add(v)
+                unique_values.append(v)
+        values = unique_values
+    
+    return values
+
+
 def sensitivity(args, config, paco_exec):
     print("Running sensitivity analysis...")
-    parameters = config['parameters']
+    # Load parameters based on size (small/medium/large)
+    if args.size not in config:
+        print(f"Error: size '{args.size}' not found in config. Available sizes: {list(config.keys())}")
+        return
+    parameters = config[args.size]
     default_params = {k: v['default'] for k, v in parameters.items()}
 
-    # Resolve instance input (file or directory); prefer --instance-file if provided
     instance_input = args.instance_file or args.instance
+
     if not instance_input:
         print("Error: must provide --instance-file (file/dir) or --instance (dir)")
         return
@@ -27,6 +73,15 @@ def sensitivity(args, config, paco_exec):
     if not inst_path.exists():
         print(f"Error: instance path not found: {inst_path}")
         return
+
+    # Ensure output directory exists
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Clear the output file if it exists (for rerun)
+    if output_path.exists():
+        print(f"Clearing existing output file: {output_path}")
+        output_path.unlink()
 
     if inst_path.is_dir():
         candidates = [p for p in inst_path.iterdir() if p.is_file() and p.suffix == '.txt']
@@ -87,9 +142,13 @@ def sensitivity(args, config, paco_exec):
     summary_rows = []
 
     for param_name, param_cfg in parameters.items():
-        if not param_cfg.get('range'):
+        # Generate range from min/max/steps or use explicit range
+        param_range = generate_range(param_cfg)
+        if not param_range:
+            print(f"Skipping parameter '{param_name}' (no range defined)")
             continue
-        for value in param_cfg['range']:
+        print(f"Testing parameter '{param_name}' with range: {param_range}")
+        for value in param_range:
             per_inst_rt_dvt = []
             per_inst_q_dvt = []
             for inst, (brt, brt_std, bq, bq_std) in baseline.items():
@@ -144,6 +203,8 @@ def sensitivity(args, config, paco_exec):
                 print(f"Summary {param_name}={value}: runtime dev {avg_rt_dvt:+.2f}% quality dev {avg_q_dvt:+.2f}% over {len(per_inst_rt_dvt)} instance(s)")
 
     summary_path = args.summary_output or f"{args.output}.summary.csv"
+    # Ensure summary output directory exists
+    Path(summary_path).parent.mkdir(parents=True, exist_ok=True)
     if summary_rows:
         with open(summary_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=['param_name','param_value','avg_runtime_dvt','avg_solution_quality_dvt','num_instances'])

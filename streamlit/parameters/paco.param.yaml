@@ -1,19 +1,17 @@
 large:
-  num_runs: 10
-  output_csv: ../output/solutions/large_paco.csv
   params:
+    m: 50
     I: 10
     LS: 100
     Q: 2.0
     alpha: 1.25
     beta: 1.0
-    m: 50
     p: 64
     rho: 0.5
     t: 40
 medium:
   params:
-    m: 5
+    m: 10
     I: 30
     alpha: 1.1644079306735833
     beta: 1.231355790111825
@@ -24,12 +22,12 @@ medium:
     p: 64
 small:
   params:
+    m: 3
     I: 15
-    LS: 50
-    Q: 1.5578701066333343
     alpha: 1.12
     beta: 1.43
-    m: 3
-    p: 64
     rho: 0.7488418448103622
+    LS: 50
+    Q: 1.5578701066333343
     t: 50
+    p: 64

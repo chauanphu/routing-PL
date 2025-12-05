@@ -167,7 +167,7 @@ def main():
 
         for instance_file in instance_files:
             obj, time = run_solver(args.solver, param_file_path, instance_file, test_exec, size, args.timeout)
-            if obj is None:
+            if   is None:
                 print(f"Sample {instance_file.name} infeasible or timeout.")
                 # Dynamic Penalty Strategy:
                 # Avoid the "cliff" of 1e9 which distorts the Gaussian Process.
@@ -185,12 +185,12 @@ def main():
             total_time += time
             success_count += 1
 
-        if success_count == 0:
-            print("All solver runs failed for this parameter set.")
-            # Same penalty logic for total failure
-            if hasattr(objective, 'valid_scores') and objective.valid_scores:
-                return max(objective.valid_scores) * 1.5
-            return 100000.0
+        # if success_count == 0:
+        #     print("All solver runs failed for this parameter set.")
+        #     # Same penalty logic for total failure
+        #     if hasattr(objective, 'valid_scores') and objective.valid_scores:
+        #         return max(objective.valid_scores) * 1.5
+        #     return 100000.0
 
         avg_obj = total_obj / success_count
         avg_time = total_time / success_count

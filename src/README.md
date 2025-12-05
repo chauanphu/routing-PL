@@ -24,4 +24,4 @@ For example: `uv run -m src.experiment.sensitivity --size small --instance-file 
  - `--size <large | medium | small>`: Size of the problem instance.
  - `--verbose`: Enable verbose output. (Default is result only)
 
- For example: `./build/main --solver paco --params parameters/paco.tune.yaml --instances data/25/C101_co_25.txt --num-runs 1 --output output/test.csv --size small --verbose 1`
+ For example: `./build/main --solver paco --params parameters/paco.param.yaml --instances data/25/C101_co_25.txt --num-runs 1 --output output/test.csv --size small --verbose 1`
