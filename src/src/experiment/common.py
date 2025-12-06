@@ -34,13 +34,15 @@ def run_paco(params: Dict[str, Any], instance_path: str | Path, paco_exec: Path,
 
     Returns (runtime_seconds, objective) or (None, None) if failure.
     """
+    instance_path = Path(instance_path)
     temp_param_file = _create_temp_param_file(params, instance_path, size)
     try:
         cmd = [
             str(paco_exec),
             "--solver", "paco",
             "--params", temp_param_file,
-            "--instances", str(Path(instance_path).parent),
+            "--instances", str(instance_path.parent),
+            "--instance-file", str(instance_path),  # Pass the specific instance file
             "--num-runs", "1",
             "--output", "/tmp/paco_temp_output.csv",
             "--size", size,

@@ -21,7 +21,7 @@ small:
     default: 0.75
   Q:
     type: float
-    range: [1.0, 1.5, 2.0, 20.5, 3.0]
+    range: [1.0, 1.5, 2.0, 2.5, 3.0]
     default: 1.56
   LS:
     type: int
@@ -59,7 +59,7 @@ medium:
     default: 0.5
   Q:
     type: float
-    range: [1.0, 1.5, 2.0, 20.5, 3.0]
+    range: [1.0, 1.5, 2.0, 2.5, 3.0]
     default: 2.0
   LS:
     type: int

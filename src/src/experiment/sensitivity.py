@@ -14,43 +14,99 @@ from .common import load_parameters, run_paco, get_paco_exec
 
 
 def generate_range(param_cfg: dict) -> list:
-    """Generate discrete range values from min, max, steps, and default.
+    """Generate discrete range values centered around default value.
     
     If 'range' is explicitly provided, use it directly.
-    Otherwise, calculate from min, max, steps (default 5).
-    For integer types, values are rounded to nearest int.
+    Otherwise, generate 'number' values (including default) by taking 'steps' 
+    increments in both directions from 'default', ensuring values stay within [min, max].
+    
+    Args:
+        param_cfg: Dictionary with keys:
+            - default: The center value (required)
+            - number: Total count of values to generate including default (required)
+            - steps: The step size between consecutive values (required)
+            - min: Minimum allowed value (required for validation)
+            - max: Maximum allowed value (required for validation)
+            - type: 'int' or 'float' (default: 'float')
+            - range: Explicit list of values (optional, overrides generation)
+    
+    Returns:
+        List of discrete parameter values centered around default.
+    
+    Raises:
+        ValueError: If generated values fall outside [min, max] range.
     """
     # If explicit range is provided, use it
     if 'range' in param_cfg and param_cfg['range']:
         return param_cfg['range']
     
-    # If no min/max defined, return empty range (skip this parameter)
-    if 'min' not in param_cfg or 'max' not in param_cfg:
+    # Check required fields
+    if 'default' not in param_cfg:
         return []
     
-    min_val = param_cfg['min']
-    max_val = param_cfg['max']
-    steps = param_cfg.get('steps', 5)
+    if 'number' not in param_cfg or 'steps' not in param_cfg:
+        # Fallback: if no number/steps defined, return just the default
+        return [param_cfg['default']]
+    
+    default_val = param_cfg['default']
+    number = param_cfg['number']
+    step_size = param_cfg['steps']
     param_type = param_cfg.get('type', 'float')
+    min_val = param_cfg.get('min')
+    max_val = param_cfg.get('max')
     
-    if steps <= 1:
-        return [min_val]
+    if number <= 0:
+        return []
     
-    # Generate linearly spaced values
-    step_size = (max_val - min_val) / (steps - 1)
-    values = [min_val + i * step_size for i in range(steps)]
+    if number == 1:
+        return [default_val]
     
-    # Round for integer types
+    # Generate values centered around default
+    # We need (number - 1) values on either side combined
+    # Distribute evenly: half below, half above (with default in center)
+    steps_below = (number - 1) // 2
+    steps_above = (number - 1) - steps_below
+    
+    values = []
+    
+    # Generate values below default
+    for i in range(steps_below, 0, -1):
+        val = default_val - i * step_size
+        if param_type == 'int':
+            val = round(val)
+        values.append(val)
+    
+    # Add default value
     if param_type == 'int':
-        values = [round(v) for v in values]
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_values = []
-        for v in values:
-            if v not in seen:
-                seen.add(v)
-                unique_values.append(v)
-        values = unique_values
+        values.append(round(default_val))
+    else:
+        values.append(default_val)
+    
+    # Generate values above default
+    for i in range(1, steps_above + 1):
+        val = default_val + i * step_size
+        if param_type == 'int':
+            val = round(val)
+        values.append(val)
+    
+    # Remove duplicates while preserving order (important for int types)
+    seen = set()
+    unique_values = []
+    for v in values:
+        if v not in seen:
+            seen.add(v)
+            unique_values.append(v)
+    values = unique_values
+    
+    # Validate range bounds
+    if min_val is not None and max_val is not None:
+        out_of_range = [v for v in values if v < min_val or v > max_val]
+        if out_of_range:
+            raise ValueError(
+                f"Generated values {out_of_range} are outside the allowed range [{min_val}, {max_val}]. "
+                f"Default={default_val}, steps={step_size}, number={number}. "
+                f"Consider adjusting 'steps', 'number', or the min/max bounds."
+            )
     
     return values
 
