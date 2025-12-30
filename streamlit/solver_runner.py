@@ -48,6 +48,7 @@ def run_solver(
     instance_content: str,
     solver: str = "paco",
     size: str = "small",
+    params_override: Optional[dict] = None,
 ) -> SolverResult:
     """
     Run the VRP solver on an instance file.
@@ -56,6 +57,7 @@ def run_solver(
         instance_content: Content of the VRP instance file
         solver: Solver name ("paco" or "sa")
         size: Problem size ("small", "medium", "large")
+        params_override: Optional dictionary of parameters to override default config
         
     Returns:
         SolverResult with solution data or error information
@@ -81,7 +83,6 @@ def run_solver(
         )
     
     solver_path = get_solver_binary_path()
-    params_path = get_params_path(solver)
     
     if not solver_path.exists():
         return SolverResult(
@@ -92,16 +93,27 @@ def run_solver(
             success=False,
             error_message=f"Solver binary not found at: {solver_path}"
         )
-    
-    if not params_path.exists():
-        return SolverResult(
-            objective=0,
-            vehicles=0,
-            runtime=0,
-            routes=[],
-            success=False,
-            error_message=f"Parameter file not found at: {params_path}"
-        )
+
+    # Handle parameters (default or override)
+    temp_params_path = None
+    if params_override:
+        # Create temp file for overridden parameters
+        import yaml
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            yaml.dump(params_override, f)
+            params_path = Path(f.name)
+            temp_params_path = params_path
+    else:
+        params_path = get_params_path(solver)
+        if not params_path.exists():
+            return SolverResult(
+                objective=0,
+                vehicles=0,
+                runtime=0,
+                routes=[],
+                success=False,
+                error_message=f"Parameter file not found at: {params_path}"
+            )
     
     # Write instance to temp file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
@@ -199,3 +211,10 @@ def run_solver(
             instance_path.unlink()
         except:
             pass
+            
+        # Clean up temp params file if created
+        if temp_params_path:
+            try:
+                temp_params_path.unlink()
+            except:
+                pass

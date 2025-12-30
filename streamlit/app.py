@@ -13,9 +13,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 import numpy as np
+import yaml
+from pathlib import Path
 
 from vrp_parser import parse_instance, VRPInstance, get_node_type_name, get_node_color
-from solver_runner import run_solver, AVAILABLE_SOLVERS, SIZE_OPTIONS, SolverResult
+from solver_runner import run_solver, AVAILABLE_SOLVERS, SIZE_OPTIONS, SolverResult, get_params_path
 
 
 # Page configuration
@@ -49,7 +51,7 @@ uploaded_file = st.sidebar.file_uploader(
 solver = st.sidebar.selectbox(
     "Select Solver",
     options=AVAILABLE_SOLVERS,
-    format_func=lambda x: {"paco": "PACO (Parallel ACO)", "sa": "SA (Simulated Annealing)"}.get(x, x),
+    format_func=lambda x: {"paco": "PACO (Parallel ACO)"}.get(x, x),
 )
 
 # Size selection
@@ -58,6 +60,87 @@ size = st.sidebar.selectbox(
     options=SIZE_OPTIONS,
     help="Select parameter preset based on problem size"
 )
+
+# Configuration Mode
+config_mode = st.sidebar.radio(
+    "Configuration",
+    options=["Default", "Manual"],
+    help="Choose 'Manual' to customize solver parameters"
+)
+
+params_override = None
+
+if config_mode == "Manual":
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🛠️ Manual Parameters")
+    
+    try:
+        # Load default parameters for current solver
+        params_path = get_params_path(solver)
+        if params_path.exists():
+            with open(params_path, 'r') as f:
+                full_config = yaml.safe_load(f)
+            
+            # Get params for selected size
+            if size in full_config:
+                current_config = full_config[size]
+                # Deep copy to avoid modifying original info directly (though we re-read anyway)
+                import copy
+                edited_config = copy.deepcopy(current_config)
+                
+                # We expect a 'params' key inside
+                if 'params' in edited_config:
+                    st.sidebar.markdown(f"**{size.capitalize()} Parameters**")
+                    param_dict = edited_config['params']
+                    
+                    # Create widgets for each parameter
+                    new_params = {}
+                    for key, value in param_dict.items():
+                        if isinstance(value, float):
+                            new_params[key] = st.sidebar.number_input(
+                                f"{key}", value=value, format="%.4f"
+                            )
+                        elif isinstance(value, int):
+                            new_params[key] = st.sidebar.number_input(
+                                f"{key}", value=value, step=1
+                            )
+                        else:
+                            # Fallback for other types (str, bool, etc.)
+                            new_params[key] = st.sidebar.text_input(f"{key}", value=str(value))
+                    
+                    # Update config with new params
+                    edited_config['params'] = new_params
+                    
+                    # Store as override (full config structure expected by solver)
+                    # The solver expects the full YAML structure, or at least the part that `solver_runner`
+                    # creates?
+                    # Wait, `solver_runner` logic:
+                    # It writes `params_override` to a temp file.
+                    # The C++ solver reads this file.
+                    # The C++ solver likely expects the FULL structure:
+                    # size:
+                    #   params: ...
+                    # So we should pass a dict that looks like `{size: ...}`?
+                    # OR does the C++ solver take `--size` and look up that key in the yaml?
+                    # Yes, `solver_runner` passes `--size`.
+                    # So the YAML must contain the size key.
+                    # So we should construct a full config dict.
+                    
+                    # To be safe, we can just pass the FULL config we loaded, but updated with new params.
+                    # BUT we only edited one size.
+                    # Let's just update the specific size in the full config.
+                    full_config[size] = edited_config
+                    params_override = full_config
+                    
+                else:
+                    st.sidebar.warning(f"No 'params' section found for size '{size}'")
+            else:
+                st.sidebar.warning(f"Size '{size}' not found in parameter file")
+        else:
+            st.sidebar.error(f"Parameter file not found: {params_path}")
+            
+    except Exception as e:
+        st.sidebar.error(f"Error loading parameters: {e}")
 
 # Initialize session state
 if 'instance' not in st.session_state:
@@ -241,6 +324,7 @@ if st.session_state.instance is not None:
                 st.session_state.instance_content,
                 solver=solver,
                 size=size,
+                params_override=params_override,
             )
             st.session_state.solution = result
         
