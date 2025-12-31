@@ -15,9 +15,10 @@ from matplotlib.lines import Line2D
 import numpy as np
 import yaml
 from pathlib import Path
+import pandas as pd
 
-from vrp_parser import parse_instance, VRPInstance, get_node_type_name, get_node_color
-from solver_runner import run_solver, AVAILABLE_SOLVERS, SIZE_OPTIONS, SolverResult, get_params_path
+from vrp_parser import parse_instance, VRPInstance, get_node_type_name, get_node_color, generate_instance_content
+from solver_api_client import run_solver, AVAILABLE_SOLVERS, SIZE_OPTIONS, SolverResult, get_params_path
 
 
 # Page configuration
@@ -30,7 +31,7 @@ st.set_page_config(
 # Title and description
 st.title("🚚 Vehicle Routing Problem Solver")
 st.markdown("""
-Upload a VRP instance file, visualize the problem, and solve it using optimization algorithms.
+Upload a VRP instance file or create one manually, visualize the problem, and solve it using optimization algorithms.
 
 **Supported Solvers:**
 - **PACO**: Parallel Ant Colony Optimization
@@ -40,12 +41,27 @@ Upload a VRP instance file, visualize the problem, and solve it using optimizati
 # Sidebar for controls
 st.sidebar.header("⚙️ Settings")
 
-# File upload
-uploaded_file = st.sidebar.file_uploader(
-    "Upload VRP Instance File",
-    type=["txt"],
-    help="Upload a VRP-PL instance file in the standard format"
+# Input Mode Selection
+input_mode = st.sidebar.radio(
+    "Input Mode",
+    options=["File Upload", "Manual Input"],
+    help="Choose between uploading a file or creating an instance manually"
 )
+
+# Initialize uploaded_file
+uploaded_file = None
+
+if input_mode == "File Upload":
+    # File upload
+    uploaded_file = st.sidebar.file_uploader(
+        "Upload VRP Instance File",
+        type=["txt"],
+        help="Upload a VRP-PL instance file in the standard format"
+    )
+elif input_mode == "Manual Input":
+    st.sidebar.info("Configure the instance parameters in the main area.")
+
+st.sidebar.markdown("---")
 
 # Solver selection
 solver = st.sidebar.selectbox(
@@ -291,7 +307,117 @@ def display_solution_info(solution: SolverResult):
 
 
 # Main content area
-if uploaded_file is not None:
+if input_mode == "Manual Input":
+    st.header("📝 Manual Instance Configuration")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        num_vehicles = st.number_input("Number of Vehicles", min_value=1, value=5)
+    with col2:
+        vehicle_capacity = st.number_input("Vehicle Capacity", min_value=1, value=100)
+    
+    st.subheader("Depot Configuration")
+    d_col1, d_col2, d_col3, d_col4 = st.columns(4)
+    with d_col1:
+        depot_x = st.number_input("Depot X", value=50.0)
+    with d_col2:
+        depot_y = st.number_input("Depot Y", value=50.0)
+    with d_col3:
+        depot_start = st.number_input("Depot Start Time", value=0.0)
+    with d_col4:
+        depot_end = st.number_input("Depot End Time", value=1000.0)
+        
+    st.subheader("Customers")
+    # Default customer data
+    if 'manual_customers' not in st.session_state:
+        st.session_state.manual_customers = pd.DataFrame({
+            "x": [20.0, 80.0],
+            "y": [20.0, 80.0],
+            "demand": [10, 15],
+            "earliest": [0.0, 0.0],
+            "latest": [1000.0, 1000.0],
+            "service_time": [10.0, 10.0],
+            "type": ["Home", "Flexible"]
+        })
+
+    edited_customers = st.data_editor(
+        st.session_state.manual_customers,
+        column_config={
+            "type": st.column_config.SelectboxColumn(
+                "Type",
+                options=["Home", "Locker", "Flexible"],
+                required=True
+            )
+        },
+        num_rows="dynamic",
+        key="customer_editor"
+    )
+    
+    st.subheader("Lockers")
+    if 'manual_lockers' not in st.session_state:
+        st.session_state.manual_lockers = pd.DataFrame({
+            "x": [50.0],
+            "y": [50.0],
+            "earliest": [0.0],
+            "latest": [1000.0],
+            "service_time": [0.0]
+        })
+        
+    edited_lockers = st.data_editor(
+        st.session_state.manual_lockers,
+        num_rows="dynamic",
+        key="locker_editor"
+    )
+
+    if st.button("Generate & Load Instance", type="primary"):
+        # Logic to convert dataframes to string format
+        try:
+             # Prepare data for generator
+             depot_data = {
+                 'x': depot_x, 'y': depot_y, 
+                 'earliest': depot_start, 'latest': depot_end
+             }
+             
+             type_map = {"Home": 1, "Locker": 2, "Flexible": 3}
+             
+             customers_list = []
+             for _, row in edited_customers.iterrows():
+                 c = row.to_dict()
+                 c['type'] = type_map.get(c['type'], 1)
+                 # Ensure defaults for required fields if missing
+                 c['service_time'] = c.get('service_time', 10.0)
+                 c['demand'] = c.get('demand', 0)
+                 c['earliest'] = c.get('earliest', 0.0)
+                 c['latest'] = c.get('latest', 1000.0)
+                 customers_list.append(c)
+                 
+             lockers_list = []
+             for _, row in edited_lockers.iterrows():
+                 l = row.to_dict()
+                 l['service_time'] = l.get('service_time', 0.0)
+                 l['earliest'] = l.get('earliest', 0.0)
+                 l['latest'] = l.get('latest', 1000.0)
+                 lockers_list.append(l)
+
+             content = generate_instance_content(
+                 num_vehicles=num_vehicles,
+                 vehicle_capacity=vehicle_capacity,
+                 depot=depot_data,
+                 customers=customers_list,
+                 lockers=lockers_list
+             )
+             
+             instance = parse_instance(content)
+             st.session_state.instance = instance
+             st.session_state.instance_content = content
+             st.session_state.solution = None
+             st.success("✅ Generated Instance Successfully!")
+             st.rerun()
+             
+        except Exception as e:
+            st.error(f"Error generating instance: {e}")
+
+elif uploaded_file is not None:
     # Read and parse the file
     try:
         content = uploaded_file.read().decode('utf-8')
