@@ -118,7 +118,7 @@ class SolverService:
                     "--size", size,
                     "--full-solution"
                 ]
-                
+                print("[INFO]: Running command:", cmd)
                 # Run solver
                 result = subprocess.run(
                     cmd,

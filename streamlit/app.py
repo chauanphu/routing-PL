@@ -4,7 +4,7 @@ VRP Visualization Streamlit App
 A web interface for:
 1. Uploading VRP instance files
 2. Visualizing the problem (depot, customers, lockers)
-3. Running PACO/SA solvers
+3. Running PACO solvers
 4. Displaying and plotting solution routes
 """
 
@@ -18,7 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 from vrp_parser import parse_instance, VRPInstance, get_node_type_name, get_node_color, generate_instance_content
-from solver_api_client import run_solver, AVAILABLE_SOLVERS, SIZE_OPTIONS, SolverResult, get_params_path
+from solver_api_client import run_solver, solve_manual, AVAILABLE_SOLVERS, SIZE_OPTIONS, SolverResult, get_params_path
 
 
 # Page configuration
@@ -35,7 +35,6 @@ Upload a VRP instance file or create one manually, visualize the problem, and so
 
 **Supported Solvers:**
 - **PACO**: Parallel Ant Colony Optimization
-- **SA**: Simulated Annealing
 """)
 
 # Sidebar for controls
@@ -127,24 +126,6 @@ if config_mode == "Manual":
                     # Update config with new params
                     edited_config['params'] = new_params
                     
-                    # Store as override (full config structure expected by solver)
-                    # The solver expects the full YAML structure, or at least the part that `solver_runner`
-                    # creates?
-                    # Wait, `solver_runner` logic:
-                    # It writes `params_override` to a temp file.
-                    # The C++ solver reads this file.
-                    # The C++ solver likely expects the FULL structure:
-                    # size:
-                    #   params: ...
-                    # So we should pass a dict that looks like `{size: ...}`?
-                    # OR does the C++ solver take `--size` and look up that key in the yaml?
-                    # Yes, `solver_runner` passes `--size`.
-                    # So the YAML must contain the size key.
-                    # So we should construct a full config dict.
-                    
-                    # To be safe, we can just pass the FULL config we loaded, but updated with new params.
-                    # BUT we only edited one size.
-                    # Let's just update the specific size in the full config.
                     full_config[size] = edited_config
                     params_override = full_config
                     
@@ -165,6 +146,8 @@ if 'instance_content' not in st.session_state:
     st.session_state.instance_content = None
 if 'solution' not in st.session_state:
     st.session_state.solution = None
+if 'manual_data' not in st.session_state:
+    st.session_state.manual_data = None
 
 
 def plot_instance(instance: VRPInstance, solution: SolverResult = None) -> plt.Figure:
@@ -411,6 +394,16 @@ if input_mode == "Manual Input":
              st.session_state.instance = instance
              st.session_state.instance_content = content
              st.session_state.solution = None
+
+             # Store structured data for API payload
+             st.session_state.manual_data = {
+                 "num_vehicles": num_vehicles,
+                 "vehicle_capacity": vehicle_capacity,
+                 "depot": depot_data,
+                 "customers": customers_list,
+                 "lockers": lockers_list
+             }
+
              st.success("✅ Generated Instance Successfully!")
              st.rerun()
              
@@ -446,12 +439,31 @@ if st.session_state.instance is not None:
     
     if st.button("🚀 Run Solver", type="primary"):
         with st.spinner(f"Running {solver.upper()} solver..."):
-            result = run_solver(
-                st.session_state.instance_content,
-                solver=solver,
-                size=size,
-                params_override=params_override,
-            )
+            if input_mode == "Manual Input":
+                if st.session_state.manual_data:
+                    st.info("Using Manual Input Endpoint") # Optional debug
+                    result = solve_manual(
+                        st.session_state.manual_data,
+                        solver=solver,
+                        size=size,
+                        params_override=params_override,
+                    )
+                else:
+                    st.warning("⚠️ Please click 'Generate & Load Instance' above to prepare the data.")
+                    result = SolverResult(
+                        objective=0, vehicles=0, runtime=0, routes=[],
+                        success=False, 
+                        error_message="Manual data not generated. Click 'Generate & Load Instance' first."
+                    )
+            else:
+                # st.info("Using File Upload Endpoint") # Optional debug
+                result = run_solver(
+                    st.session_state.instance_content,
+                    solver=solver,
+                    size=size,
+                    params_override=params_override,
+                )
+            
             st.session_state.solution = result
         
         if result.success:
@@ -507,4 +519,4 @@ else:
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.markdown("**VRP-PL Solver** v1.0")
-st.sidebar.markdown("Using PACO and SA algorithms")
+st.sidebar.markdown("Using PACO algorithm")

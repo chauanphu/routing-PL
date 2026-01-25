@@ -13,25 +13,40 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy source code
+# Copy source code relative to the build context
 COPY src/ /app/src/
 
 # Build C++ solver
 WORKDIR /app/src/build
 RUN cmake .. && make test
 
-# Setup Streamlit app
+# --- Backend Setup ---
+WORKDIR /app/backend
+COPY backend/ /app/backend/
+
+# Copy compiled binary to where the backend expects it
+RUN mkdir -p bin && cp /app/src/build/test bin/test
+
+# Install Backend dependencies
+RUN uv pip install --system .
+
+# --- Streamlit Setup ---
 WORKDIR /app/streamlit
 COPY streamlit/ /app/streamlit/
 
-# Copy compiled binary to where the app expects it
-RUN mkdir -p bin && cp /app/src/build/test bin/test
-
-# Install Python dependencies using uv
+# Install Streamlit dependencies
+# Note: requests is needed by solver_api_client.py but was missing in streamlit/pyproject.toml.
+# It will be provided by backend dependencies.
 RUN uv pip install --system .
 
-# Expose Streamlit port
+# --- Final Setup ---
+WORKDIR /app
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Expose ports: 8000 for FastAPI, 8501 for Streamlit
+EXPOSE 8000
 EXPOSE 8501
 
-# Run the application
-CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0"]
+# Run the startup script
+CMD ["/app/start.sh"]

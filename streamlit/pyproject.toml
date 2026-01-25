@@ -9,3 +9,6 @@ dependencies = [
     "pyyaml>=6.0.3",
     "streamlit>=1.51.0",
 ]
+
+[tool.setuptools]
+py-modules = ["app", "solver_api_client", "vrp_parser"]

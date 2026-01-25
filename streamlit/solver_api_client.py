@@ -84,3 +84,61 @@ def run_solver(
             success=False,
             error_message=f"Client Error: {e}"
         )
+
+def solve_manual(
+    manual_data: Dict[str, Any],
+    solver: str = "paco",
+    size: str = "small",
+    params_override: Optional[dict] = None,
+) -> SolverResult:
+    """
+    Run the solver via the manual definition API.
+    """
+    try:
+        payload = {
+            **manual_data,
+            "solver": solver,
+            "size": size,
+            "params_override": params_override
+        }
+        # Ensure payload is JSON serializable (handle numpy types if any)
+        class NumpyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if hasattr(obj, 'item'):
+                    return obj.item()
+                if hasattr(obj, 'tolist'):
+                    return obj.tolist()
+                return super().default(obj)
+
+        print(f"Sending request to {API_URL}/solve/manual")
+        json_payload = json.dumps(payload, cls=NumpyEncoder)
+        print(f"Payload: {json_payload}")
+        # Send as pre-encoded string to avoid any issues with requests' default serializer
+        # response = requests.post(
+        #     f"{API_URL}/solve/manual", 
+        #     data=json_payload, 
+        #     headers={"Content-Type": "application/json"},
+        #     timeout=310
+        # )
+        
+        if response.status_code == 200:
+            return SolverResult.from_dict(response.json())
+        else:
+            return SolverResult(
+                objective=0, vehicles=0, runtime=0, routes=[],
+                success=False,
+                error_message=f"API Error {response.status_code}: {response.text}"
+            )
+            
+    except requests.exceptions.ConnectionError:
+        return SolverResult(
+            objective=0, vehicles=0, runtime=0, routes=[],
+            success=False,
+            error_message="Could not connect to backend API. Is it running?"
+        )
+    except Exception as e:
+        return SolverResult(
+            objective=0, vehicles=0, runtime=0, routes=[],
+            success=False,
+            error_message=f"Client Error: {e}"
+        )
