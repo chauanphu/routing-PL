@@ -2,7 +2,7 @@ services:
   vrp-app:
     build: .
     container_name: vrp-app
-    image: vrp-app:1.1.1
+    image: vrp-app:1.1.2
     ports:
       - "8501:8501"
       - "8000:8000"
