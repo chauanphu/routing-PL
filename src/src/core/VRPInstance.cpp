@@ -1,4 +1,6 @@
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include "VRPInstance.h"
 
 VRPInstance::VRPInstance()
@@ -8,7 +10,13 @@ VRPInstance::VRPInstance()
 static double euclidean(const Node& a, const Node& b) {
     double dx = a.x - b.x;
     double dy = a.y - b.y;
-    return std::sqrt(dx * dx + dy * dy);
+    double d = std::sqrt(dx * dx + dy * dy);
+    // Set VRPPL_DISTANCE=trunc1 to truncate distances to 1 decimal (convention of the published VRPPL BKS).
+    static const bool trunc1 = [] {
+        const char* m = std::getenv("VRPPL_DISTANCE");
+        return m && std::strcmp(m, "trunc1") == 0;
+    }();
+    return trunc1 ? std::trunc(d * 10) / 10 : d;
 }
 
 // Build the distance matrix after all nodes are parsed

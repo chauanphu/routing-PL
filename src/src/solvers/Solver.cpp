@@ -5,6 +5,13 @@
 #include <iostream>
 #include <unordered_set>
 
+// Service time of a node (customer or locker). Charged once per visit, when leaving the node.
+static double node_service_time(const VRPInstance& instance, int node) {
+    if (node == 0) return 0.0;
+    if (node <= instance.num_customers) return instance.customers[node-1]->service_time;
+    return instance.lockers[node-1-instance.num_customers]->service_time;
+}
+
 // Route construction: builds routes from permutation and customer2node mapping
 struct RouteResult {
     std::vector<std::vector<int>> routes; // node IDs
@@ -20,7 +27,7 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
     std::vector<std::vector<int>> routes;
     int vehicle = 0;
     int load = 0;
-    int time = 0;
+    double time = 0;
     int curr_node = depot_id;
     std::vector<int> route = {depot_id};
     bool feasible = true;
@@ -33,7 +40,7 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
         int delivery_node = customer2node.at(cust_id);
         int demand = instance.customers[cust_idx]->demand;
         int node_idx = delivery_node;
-        int arr_time = time + (int)instance.distance_matrix[curr_node][node_idx];
+        double arr_time = time + (node_idx == curr_node ? 0.0 : node_service_time(instance, curr_node) + instance.distance_matrix[curr_node][node_idx]);
         int early = 0, late = 0;
         bool is_locker = (delivery_node > instance.num_customers);
         if (delivery_node <= instance.num_customers) {
@@ -78,7 +85,7 @@ static RouteResult construct_routes(const VRPInstance& instance, const std::vect
         // Add distance from current node to delivery node
         total_distance += instance.distance_matrix[curr_node][delivery_node];
         // Update state
-        time = std::max(arr_time, early);
+        time = std::max(arr_time, (double)early);
         load += demand;
         route.push_back(delivery_node);
         curr_node = delivery_node;
@@ -111,7 +118,7 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
     int vehicle = 0;
     std::vector<int> route;
     int load = 0;
-    int time = 0;
+    double time = 0;
     int curr_node = depot_id;
     std::unordered_set<int> visited_lockers;
     int last_node = depot_id;
@@ -160,7 +167,7 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
             early = l->early_time;
             late = l->late_time;
         }
-        int arr_time = time + (int)instance.distance_matrix[curr_node][delivery_node];
+        double arr_time = time + (delivery_node == curr_node ? 0.0 : node_service_time(instance, curr_node) + instance.distance_matrix[curr_node][delivery_node]);
         bool duplicate_locker = false;
         if (is_locker) {
             if (visited_lockers.count(delivery_node) && delivery_node != last_node) {
@@ -173,7 +180,7 @@ static RouteResult construct_routes_delimiter(const VRPInstance& instance, const
             break;
         }
         total_distance += instance.distance_matrix[curr_node][delivery_node];
-        time = std::max(arr_time, early);
+        time = std::max(arr_time, (double)early);
         load += demand;
         route.push_back(delivery_node);
         curr_node = delivery_node;
